@@ -17,7 +17,7 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
-body{min-height:100vh;padding-bottom:90px}
+body{min-height:100vh;padding-bottom:calc(82px + env(safe-area-inset-bottom))}
 a{color:var(--accent2);text-decoration:none}
 button{font:inherit;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none}
@@ -25,26 +25,35 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px 2px;letter-spacing:.02em;text-transform:uppercase}
 .hide{display:none!important}
 
-header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,rgba(11,18,32,.95),rgba(11,18,32,.85));backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.hbar{display:flex;align-items:center;gap:8px;padding:12px 14px;max-width:1100px;margin:0 auto}
+header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,rgba(11,18,32,.95),rgba(11,18,32,.85));backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
+.hbar{display:flex;align-items:center;gap:8px;padding:10px 14px;max-width:1100px;margin:0 auto}
 .vpick{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;text-align:left;min-width:0}
 .vpick .ic{font-size:18px;line-height:1}
 .vpick .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;flex:1;min-width:0}
 .vpick .chev{color:var(--muted);font-size:11px}
 .hbar .km{font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent2);font-size:13px;white-space:nowrap}
 
-main{max-width:1100px;margin:0 auto;padding:16px}
+main{max-width:1100px;margin:0 auto;padding:14px}
+@media (max-width:480px){ main{padding:10px} }
 
-nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(11,18,32,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 4px env(safe-area-inset-bottom)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(11,18,32,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:4px 4px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
 nav.tabs .row{display:flex;justify-content:space-between;max-width:680px;margin:0 auto}
-nav.tabs button{flex:1;background:transparent;border:0;color:var(--muted);padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;border-radius:10px;transition:.15s}
-nav.tabs button .ic{font-size:20px;line-height:1}
+nav.tabs button{flex:1;background:transparent;border:0;color:var(--muted);padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;border-radius:10px;transition:.15s;min-width:0}
+nav.tabs button .ic{font-size:19px;line-height:1}
 nav.tabs button.active{color:var(--text)}
 nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8px rgba(59,130,246,.5))}
+@media (max-width:360px){
+  nav.tabs button{font-size:9px}
+  nav.tabs button .ic{font-size:17px}
+}
 
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
-.card h2{margin:0 0 12px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.card h2{margin:0 0 12px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card h2 .pill{font-size:11px;background:var(--panel2);color:var(--muted);padding:2px 8px;border-radius:99px;font-weight:500}
+@media (max-width:480px){
+  .card{padding:13px;margin-bottom:10px}
+  .card h2{font-size:14px;margin-bottom:10px}
+}
 
 .grid{display:grid;gap:10px}
 .grid.cols2{grid-template-columns:repeat(2,1fr)}
@@ -52,13 +61,18 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .grid.cols4{grid-template-columns:repeat(4,1fr)}
 @media (max-width:640px){
   .grid.cols3,.grid.cols4{grid-template-columns:repeat(2,1fr)}
+  .grid{gap:8px}
 }
 
-.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
-.kpi .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.kpi .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
-.kpi .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0;overflow:hidden}
+.kpi .lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi.accent .val{color:var(--accent2)}
+@media (max-width:380px){
+  .kpi{padding:11px}
+  .kpi .val{font-size:17px}
+}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--accent);color:#fff;border-radius:10px;padding:11px 14px;font-weight:600;letter-spacing:.01em;transition:.15s}
 .btn:hover{filter:brightness(1.1)}
@@ -68,7 +82,7 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .btn.small{padding:7px 10px;font-size:12px;font-weight:500;border-radius:8px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
 
-.fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:0;font-size:26px;line-height:1;box-shadow:0 8px 24px rgba(59,130,246,.45);z-index:40;display:flex;align-items:center;justify-content:center;transition:.15s}
+.fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:0;font-size:26px;line-height:1;box-shadow:0 8px 24px rgba(59,130,246,.45);z-index:40;display:flex;align-items:center;justify-content:center;transition:.15s}
 .fab:active{transform:scale(.92)}
 
 .list{display:flex;flex-direction:column;gap:8px}
@@ -80,7 +94,7 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .row-item .amt small{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
 
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0;overflow-y:auto}
-.modal-content{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:18px 16px 30px;border-top:1px solid var(--line);animation:slideUp .25s ease-out}
+.modal-content{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:18px 16px calc(28px + env(safe-area-inset-bottom));border-top:1px solid var(--line);animation:slideUp .25s ease-out}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .modal-content h3{margin:0 0 14px;font-size:17px;display:flex;align-items:center;justify-content:space-between}
 .modal-content h3 .close{background:transparent;border:0;color:var(--muted);font-size:24px;padding:0 4px}
@@ -95,7 +109,9 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .alert.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:#fca5a5}
 
 .chart-wrap{position:relative;height:240px}
-@media (max-width:640px){.chart-wrap{height:200px}}
+@media (max-width:640px){.chart-wrap{height:210px}}
+.chart-wrap.donut{height:280px}
+@media (max-width:640px){.chart-wrap.donut{height:260px}}
 
 table.simple{width:100%;border-collapse:collapse;font-size:13px}
 table.simple th,table.simple td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line)}
@@ -128,7 +144,7 @@ table.simple td{font-variant-numeric:tabular-nums}
 .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 .fxhint{font-size:11px;color:var(--accent2);margin-top:6px;font-variant-numeric:tabular-nums}
 
-.toast{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:12px 18px;border-radius:99px;box-shadow:var(--shadow);z-index:200;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;animation:fadeIn .2s ease-out}
+.toast{position:fixed;bottom:calc(150px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:12px 18px;border-radius:99px;box-shadow:var(--shadow);z-index:200;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;animation:fadeIn .2s ease-out;max-width:90vw}
 @keyframes fadeIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 
 .vehicle-row{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer}
@@ -214,7 +230,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 
     <div class="card">
       <h2>📋 Répartition des dépenses</h2>
-      <div class="chart-wrap" style="height:220px"><canvas id="chartPie"></canvas></div>
+      <div class="chart-wrap donut"><canvas id="chartPie"></canvas></div>
     </div>
   </section>
 
@@ -532,6 +548,8 @@ function _sanitize(s){
       if(!f.fuel){
         f.fuel = v.fuel==='diesel'?'Diesel':v.fuel==='e85'?'E85':'SP95';
       }
+      if(f.station===undefined) f.station='';
+      if(f.location===undefined) f.location='';
     });
     // migrate maintenance / tires / purchases
     v.maintenance.forEach(m=>{
@@ -969,6 +987,19 @@ function renderVehicleListSettings(){
 /* ============= FORMS ============= */
 /* Fuel options for fillup form */
 const FUEL_CHOICES = ['SP95','SP98','E85','Diesel'];
+/* Common fuel stations (CH + FR) — used as starter suggestions */
+const COMMON_STATIONS = ['Shell','BP','Esso','Migrol','Avia','Coop Pronto','Tamoil','Agrola','Socar','Total','TotalEnergies','Intermarché','Carrefour','E.Leclerc','Auchan','Casino','Système U','Eni','Q8','Aral'];
+function stationSuggestionsForVehicle(v){
+  const set = new Set();
+  v.fillups.forEach(f=>{ if(f.station) set.add(f.station) });
+  COMMON_STATIONS.forEach(s=>set.add(s));
+  return Array.from(set);
+}
+function locationSuggestionsForVehicle(v){
+  const set = new Set();
+  v.fillups.forEach(f=>{ if(f.location) set.add(f.location) });
+  return Array.from(set);
+}
 function defaultFuelForVehicle(v){
   if(v.fuel==='diesel') return 'Diesel';
   if(v.fuel==='e85') return 'E85';
@@ -982,7 +1013,9 @@ function prevFillupBefore(km){
 
 function openFillupForm(existing){
   const v = active();
-  const f = existing || { date:today(), km:currentKm()||'', liters:'', pricePerLiter:'', total:'', fullTank:true, notes:'', currency:v.currency, rate:1, totalConverted:0, adblueLiters:'', adblueCost:'', adbluePricePerLiter:'', fuel:defaultFuelForVehicle(v) };
+  const f = existing || { date:today(), km:currentKm()||'', liters:'', pricePerLiter:'', total:'', fullTank:true, notes:'', currency:v.currency, rate:1, totalConverted:0, adblueLiters:'', adblueCost:'', adbluePricePerLiter:'', fuel:defaultFuelForVehicle(v), station:'', location:'' };
+  const stationOpts = stationSuggestionsForVehicle(v);
+  const locationOpts = locationSuggestionsForVehicle(v);
   const showAdblue = (existing && (existing.adblueLiters>0 || existing.adblueCost>0));
   const isDiesel = v.fuel === 'diesel';
   const currentFuel = f.fuel || defaultFuelForVehicle(v);
@@ -1016,7 +1049,17 @@ function openFillupForm(existing){
           <button type="button" data-v="0" class="${!f.fullTank?'active':''}">Appoint</button>
         </div>
       </div>
-      <div style="grid-column:1/-1"><label>Notes</label><input id="ffNotes" value="${escapeHtml(f.notes)}" placeholder="Station, autoroute..."/></div>
+      <div style="grid-column:1/-1">
+        <label>⛽ Enseigne</label>
+        <input id="ffStation" list="ffStationList" value="${escapeHtml(f.station||'')}" placeholder="Shell, Migrol, BP, Esso..." autocomplete="off"/>
+        <datalist id="ffStationList">${stationOpts.map(s=>`<option value="${escapeHtml(s)}">`).join('')}</datalist>
+      </div>
+      <div style="grid-column:1/-1">
+        <label>📍 Lieu</label>
+        <input id="ffLocation" list="ffLocationList" value="${escapeHtml(f.location||'')}" placeholder="Genève, A40, Annemasse..." autocomplete="off"/>
+        <datalist id="ffLocationList">${locationOpts.map(s=>`<option value="${escapeHtml(s)}">`).join('')}</datalist>
+      </div>
+      <div style="grid-column:1/-1"><label>Notes</label><input id="ffNotes" value="${escapeHtml(f.notes)}" placeholder="Autoroute, voyage..."/></div>
     </div>
     <div class="fxhint" id="ffFxHint"></div>
     ${isDiesel ? `
@@ -1123,6 +1166,8 @@ async function saveFillup(id){
     currency: cur, rate, fxDate, fxSource: source,
     totalConverted: +(finalTotal*rate).toFixed(2),
     fullTank: el('ffFull').querySelector('button.active').dataset.v==='1',
+    station: el('ffStation').value.trim(),
+    location: el('ffLocation').value.trim(),
     notes: el('ffNotes').value.trim(),
     adblueLiters: adL, adbluePricePerLiter: adPpl, adblueCost: adC,
     adblueCostConverted: +(adC*rate).toFixed(2)
@@ -1359,11 +1404,17 @@ function renderFuelList(){
     const amtMain = money(Number(f.totalConverted||f.total||0)+Number(f.adblueCostConverted||0), v.currency);
     const amtSub = (f.currency!==v.currency) ? `<small>${money(Number(f.total||0)+Number(f.adblueCost||0), f.currency)}</small>` : '';
     const distLine = meta&&meta.dist ? `<div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:2px">+${fmtInt(meta.dist)} km</div>` : '';
+    const stationLine = (f.station||f.location) ? `<div class="meta" style="color:#e8eefc;font-weight:500">${f.station?'⛽ '+escapeHtml(f.station):''}${f.station&&f.location?' · ':''}${f.location?'📍 '+escapeHtml(f.location):''}</div>` : '';
+    const consNotesParts = [];
+    if(meta&&meta.conso) consNotesParts.push(fmt(meta.conso,2)+' L/100');
+    if(f.notes) consNotesParts.push(escapeHtml(f.notes));
+    const consNotesLine = consNotesParts.length ? `<div class="meta">${consNotesParts.join(' · ')}</div>` : '';
     return `<div class="row-item" onclick='openFillupForm(${JSON.stringify(f).replace(/'/g,"&#39;")})'>
       <div class="dt">${fmtDate(f.date)}<br/><span class="muted">${fmtInt(f.km)} km</span>${distLine}</div>
       <div>
         <div class="ttl">${fmt(f.liters,2)} L à ${fmt(f.pricePerLiter,3)} ${moneySym(f.currency)}/L ${fuelTag} ${tag} ${adbTag} ${fxTag}</div>
-        <div class="meta">${meta&&meta.conso?fmt(meta.conso,2)+' L/100':''}${f.notes?(meta&&meta.conso?' · ':'')+escapeHtml(f.notes):''}</div>
+        ${stationLine}
+        ${consNotesLine}
       </div>
       <div class="amt">${amtMain}${amtSub}</div>
     </div>`;
@@ -1622,13 +1673,13 @@ function exportXLSX(){
   const v = active();
   const wb = XLSX.utils.book_new();
   const cur = v.currency;
-  const fuel = [['Date','Kilométrage','Distance','Carburant','Devise paiement',`${moneySym(cur)}/L (converti)`,'Litres',`Coût total (${cur})`,`Coût origine`,'Taux','AdBlue L','AdBlue €/L',`AdBlue (${cur})`,'Conso L/100','Type','Notes']];
+  const fuel = [['Date','Kilométrage','Distance','Carburant','Enseigne','Lieu','Devise paiement',`${moneySym(cur)}/L (converti)`,'Litres',`Coût total (${cur})`,`Coût origine`,'Taux','AdBlue L','AdBlue €/L',`AdBlue (${cur})`,'Conso L/100','Type','Notes']];
   const sortedAsc = sortedFillups();
   for(let i=0;i<sortedAsc.length;i++){
     const f = sortedAsc[i]; const prev = i>0?sortedAsc[i-1]:null;
     const dist = prev ? (f.km-prev.km) : '';
     const conso = (prev && f.fullTank && dist>0) ? +((f.liters/dist)*100).toFixed(2) : '';
-    fuel.push([f.date,f.km,dist,f.fuel||'',f.currency,+priceConverted(f).toFixed(3),f.liters,+Number(f.totalConverted||f.total).toFixed(2),`${Number(f.total||0).toFixed(2)} ${f.currency}`,f.rate||1,f.adblueLiters||'',f.adbluePricePerLiter||'',+Number(f.adblueCostConverted||0).toFixed(2),conso,f.fullTank?'PLEIN':'APPOINT',f.notes||'']);
+    fuel.push([f.date,f.km,dist,f.fuel||'',f.station||'',f.location||'',f.currency,+priceConverted(f).toFixed(3),f.liters,+Number(f.totalConverted||f.total).toFixed(2),`${Number(f.total||0).toFixed(2)} ${f.currency}`,f.rate||1,f.adblueLiters||'',f.adbluePricePerLiter||'',+Number(f.adblueCostConverted||0).toFixed(2),conso,f.fullTank?'PLEIN':'APPOINT',f.notes||'']);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fuel),'Carburant');
   const m = [['Date','Type',`Prix (${cur})`,'Devise','Prix origine','Taux','Kilométrage','Notes']];
@@ -1682,7 +1733,7 @@ function importXLSX(ev){
           const type = (getv(r,'Type')||'').toString().toUpperCase();
           const fcur = getv(r,'Devise paiement') || v.currency;
           const rate = parseFloat(getv(r,'Taux')||1);
-          v.fillups.push({id:uid(),date:toISO(getv(r,'Date')),km,liters,pricePerLiter:ppl,total:tot,currency:fcur,rate,totalConverted:+(tot*(rate||1)).toFixed(2),fullTank:type?!(type.includes('APPOINT')||type.includes('PARTIEL')||type.includes('JERRY')):true,notes:getv(r,'Notes')||'',adblueLiters:parseFloat(getv(r,'AdBlue L')||0),adblueCost:0,adblueCostConverted:parseFloat(getv(r,`AdBlue (${v.currency})`)||0)});
+          v.fillups.push({id:uid(),date:toISO(getv(r,'Date')),km,liters,pricePerLiter:ppl,total:tot,currency:fcur,rate,totalConverted:+(tot*(rate||1)).toFixed(2),fullTank:type?!(type.includes('APPOINT')||type.includes('PARTIEL')||type.includes('JERRY')):true,notes:getv(r,'Notes')||'',station:getv(r,'Enseigne','Station')||'',location:getv(r,'Lieu','Location','Ville')||'',fuel:getv(r,'Carburant')||'',adblueLiters:parseFloat(getv(r,'AdBlue L')||0),adblueCost:0,adblueCostConverted:parseFloat(getv(r,`AdBlue (${v.currency})`)||0)});
         });
       }
       if(wb.SheetNames.includes('Entretiens')){
