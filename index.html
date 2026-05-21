@@ -419,6 +419,43 @@ function presetKey(type, fuel){
   return 'auto_essence';
 }
 
+/* Free-form maintenance suggestions (in addition to the preset config items) */
+const COMMON_MAINT = {
+  diesel: [
+    'Traitement diesel','Additif diesel','Décrassage moteur','Nettoyage FAP',
+    'Nettoyage EGR','Nettoyage injecteurs','Régénération FAP forcée'
+  ],
+  essence: [
+    'Traitement essence','Additif essence','Nettoyage injecteurs','Décalaminage',
+    'Décrassage soupapes','Nettoyage admission'
+  ],
+  e85: [
+    'Traitement E85','Additif anti-corrosion','Nettoyage injecteurs','Décrassage moteur'
+  ],
+  moto: [
+    'Lubrification chaîne','Nettoyage chaîne','Réglage tension chaîne',
+    'Nettoyage filtre à air','Synchronisation carburateurs','Réglage soupapes'
+  ],
+  generic: [
+    'Lavage extérieur','Lavage intérieur','Polish','Traitement céramique',
+    'Diagnostic','Recharge clim','Gonflage pneus','Géométrie','Équilibrage',
+    'Remplacement balais essuie-glace','Recharge batterie','Autre…'
+  ]
+};
+function suggestionsForVehicle(v){
+  const set = new Set();
+  // 1. presets from maintConfig (constructor recommendations)
+  v.maintConfig.forEach(m=>set.add(m.name));
+  // 2. fuel/type-specific common items
+  if(v.type==='moto') COMMON_MAINT.moto.forEach(x=>set.add(x));
+  else COMMON_MAINT[v.fuel]?.forEach(x=>set.add(x));
+  // 3. generic items
+  COMMON_MAINT.generic.forEach(x=>set.add(x));
+  // 4. items the user has already used (so they reappear quickly)
+  v.maintenance.forEach(m=>{ if(m.type) set.add(m.type) });
+  return Array.from(set);
+}
+
 function freshVehicle(name, type='auto', fuel='diesel', tireQty=4, currency='CHF'){
   return {
     id: 'v_'+Math.random().toString(36).slice(2,9),
@@ -843,21 +880,22 @@ function deleteFillup(id){
 }
 
 function openMaintForm(existing){
-  const types = active().maintConfig.map(m=>m.name);
-  const m = existing || { date:today(), km:currentKm()||'', type:types[0]||'', price:'', notes:'' };
   const v = active();
+  const suggestions = suggestionsForVehicle(v);
+  const m = existing || { date:today(), km:currentKm()||'', type:'', price:'', notes:'' };
   showModal(`
     <h3>${existing?'Modifier':'Nouvel'} entretien 🔧 <button class="close" onclick="closeModal()">×</button></h3>
     <div class="grid cols2">
       <div><label>Date</label><input id="mfDate" type="date" value="${m.date||today()}"/></div>
       <div><label>Kilométrage</label><input id="mfKm" type="number" inputmode="numeric" value="${m.km}"/></div>
       <div style="grid-column:1/-1">
-        <label>Type</label>
-        <input id="mfType" list="mfTypeList" value="${escapeHtml(m.type)}" placeholder="Vidange..."/>
-        <datalist id="mfTypeList">${types.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+        <label>Type — saisie libre ✍️</label>
+        <input id="mfType" list="mfTypeList" value="${escapeHtml(m.type)}" placeholder="Ex: Vidange, traitement diesel, additif, nettoyage injecteurs..." autocomplete="off"/>
+        <datalist id="mfTypeList">${suggestions.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
+        <p class="hint">Tape ce que tu veux. La liste qui s'ouvre donne juste des suggestions (entretien constructeur + traitements courants + tes propres saisies).</p>
       </div>
       <div><label>Prix (${v.currency})</label><input id="mfPrice" type="number" step="0.01" inputmode="decimal" value="${m.price}"/></div>
-      <div><label>Notes</label><input id="mfNotes" value="${escapeHtml(m.notes)}"/></div>
+      <div><label>Notes</label><input id="mfNotes" value="${escapeHtml(m.notes)}" placeholder="Marque produit, garage, détails..."/></div>
     </div>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn" onclick="saveMaint('${existing?existing.id:''}')">💾 Enregistrer</button>
