@@ -511,6 +511,7 @@ const PRESET_MAINT = {
     { id:'liq_frein',  name:'Liquide de frein',         intKm:60000, intMonths:24,  icon:'🛑' },
     { id:'liq_refr',   name:'Liquide refroidissement',  intKm:90000, intMonths:48,  icon:'🧊' },
     { id:'distribution',name:'Courroie distribution',   intKm:120000,intMonths:72,  icon:'⚙️' },
+    { id:'vidange_boite',name:'Vidange boîte de vitesses',intKm:80000,intMonths:60, icon:'🔩' },
     { id:'plaq_av',    name:'Plaquettes avant',         intKm:50000, intMonths:null,icon:'🧱' },
     { id:'plaq_ar',    name:'Plaquettes arrière',       intKm:70000, intMonths:null,icon:'🧱' },
     { id:'ct',         name:'Contrôle technique',       intKm:null,  intMonths:24,  icon:'📋' },
@@ -524,6 +525,7 @@ const PRESET_MAINT = {
     { id:'liq_frein',  name:'Liquide de frein',         intKm:60000, intMonths:24,  icon:'🛑' },
     { id:'liq_refr',   name:'Liquide refroidissement',  intKm:90000, intMonths:48,  icon:'🧊' },
     { id:'distribution',name:'Courroie distribution',   intKm:120000,intMonths:72,  icon:'⚙️' },
+    { id:'vidange_boite',name:'Vidange boîte de vitesses',intKm:80000,intMonths:60, icon:'🔩' },
     { id:'plaq_av',    name:'Plaquettes avant',         intKm:50000, intMonths:null,icon:'🧱' },
     { id:'plaq_ar',    name:'Plaquettes arrière',       intKm:70000, intMonths:null,icon:'🧱' },
     { id:'ct',         name:'Contrôle technique',       intKm:null,  intMonths:24,  icon:'📋' },
@@ -537,6 +539,7 @@ const PRESET_MAINT = {
     { id:'liq_frein',  name:'Liquide de frein',         intKm:60000, intMonths:24,  icon:'🛑' },
     { id:'liq_refr',   name:'Liquide refroidissement',  intKm:90000, intMonths:48,  icon:'🧊' },
     { id:'distribution',name:'Courroie distribution',   intKm:120000,intMonths:72,  icon:'⚙️' },
+    { id:'vidange_boite',name:'Vidange boîte de vitesses',intKm:80000,intMonths:60, icon:'🔩' },
     { id:'plaq_av',    name:'Plaquettes avant',         intKm:50000, intMonths:null,icon:'🧱' },
     { id:'plaq_ar',    name:'Plaquettes arrière',       intKm:70000, intMonths:null,icon:'🧱' },
     { id:'ct',         name:'Contrôle technique',       intKm:null,  intMonths:24,  icon:'📋' },
@@ -548,6 +551,7 @@ const PRESET_MAINT = {
     { id:'chaine_tension', name:'Tension chaîne',        intKm:1000,  intMonths:null,icon:'⛓️' },
     { id:'chaine_lubr',name:'Lubrification chaîne',     intKm:500,   intMonths:null,icon:'💧' },
     { id:'kit_chaine', name:'Kit chaîne (chaîne + pignons)', intKm:25000, intMonths:null, icon:'⛓️' },
+    { id:'vidange_boite',name:'Vidange boîte de vitesses', intKm:24000, intMonths:36, icon:'🔩' },
     { id:'plaq_av',    name:'Plaquettes avant',         intKm:15000, intMonths:null,icon:'🧱' },
     { id:'plaq_ar',    name:'Plaquettes arrière',       intKm:20000, intMonths:null,icon:'🧱' },
     { id:'liq_frein',  name:'Liquide de frein',         intKm:null,  intMonths:24,  icon:'🛑' },
@@ -581,9 +585,9 @@ const COMMON_MAINT = {
     'Nettoyage filtre à air','Synchronisation carburateurs','Réglage soupapes'
   ],
   generic: [
-    'Lavage extérieur','Lavage intérieur','Polish','Traitement céramique',
-    'Diagnostic','Recharge clim','Gonflage pneus','Géométrie','Équilibrage',
-    'Remplacement balais essuie-glace','Recharge batterie','Autre…'
+    'Vidange boîte de vitesses','Vidange pont','Lavage extérieur','Lavage intérieur',
+    'Polish','Traitement céramique','Diagnostic','Recharge clim','Gonflage pneus',
+    'Géométrie','Équilibrage','Remplacement balais essuie-glace','Recharge batterie','Autre…'
   ]
 };
 function suggestionsForVehicle(v){
@@ -659,6 +663,12 @@ function _sanitize(s){
     if(!v.currency) v.currency='CHF';
     if(!v.tireQty) v.tireQty=v.type==='moto'?2:4;
     if(!v.maintConfig) v.maintConfig=PRESET_MAINT[presetKey(v.type,v.fuel)].map(m=>({...m}));
+    // Auto-add new preset items that didn't exist when this vehicle was created
+    const ref = PRESET_MAINT[presetKey(v.type,v.fuel)];
+    const existingIds = new Set(v.maintConfig.map(m=>m.id));
+    ref.forEach(refItem=>{
+      if(!existingIds.has(refItem.id)) v.maintConfig.push({...refItem});
+    });
     if(v.consMin===undefined || v.consMax===undefined){
       const cr = defaultConsRange(v.type);
       v.consMin = v.consMin||cr.min;
