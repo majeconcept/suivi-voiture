@@ -75,6 +75,11 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
   .grid.cols3,.grid.cols4{grid-template-columns:repeat(2,1fr)}
   .grid{gap:8px}
 }
+/* On small mobile, form grids (réglages + modals) collapse to 1 col so segments have room */
+@media (max-width:480px){
+  #tab-reglages .grid.cols2,
+  .modal-content .grid.cols2{grid-template-columns:1fr;gap:10px}
+}
 
 .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;min-width:0;display:flex;flex-direction:column;justify-content:center}
 .kpi .lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
