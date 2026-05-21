@@ -15,8 +15,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare deploy directory
         run: |
-          mkdir _dist
+          mkdir -p _dist
           cp index.html _dist/
+          cp manifest.webmanifest _dist/
+          cp icon-source.svg _dist/
+          cp icon-180.png _dist/
+          cp icon-192.png _dist/
+          cp icon-512.png _dist/
+          cp -r functions _dist/functions
+          ls -la _dist/
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
