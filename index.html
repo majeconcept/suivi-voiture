@@ -26,13 +26,43 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 body{min-height:100vh;padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 a{color:var(--accent2);text-decoration:none}
 button{font:inherit;cursor:pointer}
-input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none;-webkit-appearance:none;appearance:none}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 label{display:block;font-size:11px;color:var(--muted);margin:0 0 4px 2px;letter-spacing:.02em;text-transform:uppercase}
 @media (max-width:480px){
   input,select,textarea{padding:10px 12px;border-radius:9px}
   label{font-size:10.5px;margin:0 0 3px 2px}
 }
+
+/* iOS date/time inputs : force alignement gauche + style cohérent */
+input[type="date"],input[type="time"],input[type="datetime-local"],input[type="month"]{
+  text-align:left;
+  min-height:42px;
+  -webkit-appearance:none;
+  appearance:none;
+  display:block;
+  position:relative;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value{
+  text-align:left;
+  color:var(--text);
+}
+input[type="date"]:invalid::-webkit-datetime-edit,
+input[type="time"]:invalid::-webkit-datetime-edit{
+  color:var(--muted);
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator{
+  filter:invert(60%) sepia(20%) saturate(400%) hue-rotate(190deg);
+  opacity:.7;
+  cursor:pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover{opacity:1}
+/* Number inputs : hide spinners on iOS for cleaner look (already done by -webkit-appearance:none) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .hide{display:none!important}
 
 header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,rgba(11,18,32,.95),rgba(11,18,32,.85));backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
