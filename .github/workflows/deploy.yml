@@ -8,6 +8,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - suivi-voiture
+          - vehicules-alm
+          - vehicules-dnx
     permissions:
       contents: read
       deployments: write
@@ -23,10 +30,9 @@ jobs:
           cp icon-192.png _dist/
           cp icon-512.png _dist/
           cp -r functions _dist/functions
-          ls -la _dist/
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages (${{ matrix.project }})
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _dist --project-name=suivi-voiture --branch=main --commit-dirty=true
+          command: pages deploy _dist --project-name=${{ matrix.project }} --branch=main --commit-dirty=true

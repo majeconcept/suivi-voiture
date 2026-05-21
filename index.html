@@ -473,6 +473,17 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 <div id="ptr"><span class="arrow">⬇️</span><span class="lbl">Tire pour rafraîchir</span></div>
 
 <script>
+/* ============= APP CONTEXT (per-subdomain) ============= */
+function detectAppContext(){
+  const h = location.hostname || '';
+  if(h.startsWith('vehicules-alm')) return { id:'alm', currency:'EUR', title:'ALM Garage', preset:'blank' };
+  if(h.startsWith('vehicules-dnx')) return { id:'dnx', currency:'EUR', title:'DNX Garage', preset:'blank' };
+  // Default = personal instance
+  return { id:'main', currency:'CHF', title:'Suivi Garage', preset:'personal' };
+}
+const APP_CTX = detectAppContext();
+document.title = APP_CTX.title;
+
 /* ============= CONSTANTS ============= */
 const LS_KEY = 'suivi_garage_v3';
 const today = () => new Date().toISOString().slice(0,10);
@@ -575,7 +586,8 @@ function suggestionsForVehicle(v){
   return Array.from(set);
 }
 
-function freshVehicle(name, type='auto', fuel='diesel', tireQty=4, currency='CHF'){
+function freshVehicle(name, type='auto', fuel='diesel', tireQty=4, currency){
+  if(!currency) currency = APP_CTX.currency;
   return {
     id: 'v_'+Math.random().toString(36).slice(2,9),
     name, type, fuel, tireQty, currency,
@@ -586,10 +598,16 @@ function freshVehicle(name, type='auto', fuel='diesel', tireQty=4, currency='CHF
 }
 
 function freshState(){
-  const audi = freshVehicle('Audi A4','auto','diesel',4,'CHF');
-  const logan = freshVehicle('Dacia Logan','auto','essence',4,'CHF');
-  const mt03 = freshVehicle('Yamaha MT-03','moto','essence',2,'CHF');
-  return { activeId: audi.id, vehicles: [audi, logan, mt03] };
+  const cur = APP_CTX.currency;
+  if(APP_CTX.preset === 'personal'){
+    const audi = freshVehicle('Audi A4','auto','diesel',4,cur);
+    const logan = freshVehicle('Dacia Logan','auto','essence',4,cur);
+    const mt03 = freshVehicle('Yamaha MT-03','moto','essence',2,cur);
+    return { activeId: audi.id, vehicles: [audi, logan, mt03] };
+  }
+  // Blank preset for new instances (alm, dnx) — 1 generic vehicle that user customizes
+  const v = freshVehicle('Mon véhicule','auto', cur==='EUR'?'essence':'diesel', 4, cur);
+  return { activeId: v.id, vehicles: [v] };
 }
 
 let state = load();
