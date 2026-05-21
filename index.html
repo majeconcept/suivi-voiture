@@ -106,7 +106,8 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .zoomctl button{background:transparent;border:0;color:var(--muted);width:26px;height:26px;border-radius:5px;font-size:14px;font-weight:600;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
 .zoomctl button:hover{background:rgba(255,255,255,.06);color:var(--text)}
 .zoomctl button:active{transform:scale(.9)}
-.zoomctl .lvl{font-size:11px;color:var(--muted);min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
+.zoomctl .lvl{font-size:11px;color:var(--muted);min-width:36px;text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;padding:2px 4px;border-radius:4px}
+.zoomctl .lvl:hover{background:rgba(255,255,255,.06);color:var(--text)}
 @media (max-width:480px){
   .card{padding:12px;margin-bottom:8px;border-radius:12px}
   .card h2{font-size:13.5px;margin-bottom:8px;letter-spacing:-0.01em}
@@ -305,21 +306,21 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 
     <div class="card">
       <h2>📊 Consommation au fil du temps <span class="pill">L/100km</span>
-        <span class="zoomctl"><button onclick="chartZoomChange('chartCons',-1)" title="Élargir">−</button><span class="lvl" id="lvlCons">1×</span><button onclick="chartZoomChange('chartCons',1)" title="Resserrer">+</button></span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartCons',-1)" title="Élargir −15%">−</button><span class="lvl" id="lvlCons" onclick="chartZoomReset('chartCons')" title="Reset auto">1×</span><button onclick="chartZoomChange('chartCons',1)" title="Resserrer +15%">+</button></span>
       </h2>
       <div class="chart-wrap"><canvas id="chartCons"></canvas></div>
     </div>
 
     <div class="card">
       <h2>⛽ Prix du carburant <span class="pill" id="lblPriceUnit">/L</span>
-        <span class="zoomctl"><button onclick="chartZoomChange('chartPrice',-1)" title="Élargir">−</button><span class="lvl" id="lvlPrice">1×</span><button onclick="chartZoomChange('chartPrice',1)" title="Resserrer">+</button></span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartPrice',-1)" title="Élargir −15%">−</button><span class="lvl" id="lvlPrice" onclick="chartZoomReset('chartPrice')" title="Reset auto">1×</span><button onclick="chartZoomChange('chartPrice',1)" title="Resserrer +15%">+</button></span>
       </h2>
       <div class="chart-wrap"><canvas id="chartPrice"></canvas></div>
     </div>
 
     <div class="card">
       <h2>💸 Dépenses mensuelles <span class="pill" id="lblMonthlyUnit">CHF</span>
-        <span class="zoomctl"><button onclick="chartZoomChange('chartMonthly',-1)" title="Élargir">−</button><span class="lvl" id="lvlMonthly">1×</span><button onclick="chartZoomChange('chartMonthly',1)" title="Resserrer">+</button></span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartMonthly',-1)" title="Élargir −15%">−</button><span class="lvl" id="lvlMonthly" onclick="chartZoomReset('chartMonthly')" title="Reset auto">1×</span><button onclick="chartZoomChange('chartMonthly',1)" title="Resserrer +15%">+</button></span>
       </h2>
       <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
     </div>
@@ -1726,24 +1727,34 @@ function renderTopAlerts(){
 let _charts = {};
 function destroyCharts(){ Object.values(_charts).forEach(c=>{try{c.destroy()}catch(e){}}); _charts={} }
 
-/* Y-axis zoom controls — 5 levels persisted per chart in localStorage */
-const ZOOM_LEVELS = [0.5, 1, 2, 4, 8];
+/* Y-axis zoom controls — continu, +/-15% par palier, persisté par chart */
+const ZOOM_STEP = 1.15;
+const ZOOM_MIN = 0.2;
+const ZOOM_MAX = 30;
 const ZOOM_LS_KEY = 'chart_zoom_v1';
 function loadZoom(){ try{ return JSON.parse(localStorage.getItem(ZOOM_LS_KEY)||'{}') }catch(e){ return {} } }
-function getZoom(id){ const z = loadZoom(); return z[id] || 1 }
+function getZoom(id){ const z = loadZoom(); return Number(z[id]) || 1 }
 function setZoom(id, val){ const z = loadZoom(); z[id]=val; localStorage.setItem(ZOOM_LS_KEY, JSON.stringify(z)) }
 function chartZoomChange(id, dir){
-  const cur = getZoom(id);
-  let i = ZOOM_LEVELS.indexOf(cur); if(i===-1) i = 1;
-  i = Math.max(0, Math.min(ZOOM_LEVELS.length-1, i + dir));
-  setZoom(id, ZOOM_LEVELS[i]);
+  let cur = getZoom(id);
+  cur = dir > 0 ? cur * ZOOM_STEP : cur / ZOOM_STEP;
+  cur = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, cur));
+  // Snap to 1.0 if very close (to allow returning to auto)
+  if(Math.abs(cur - 1) < 0.05) cur = 1;
+  setZoom(id, cur);
   renderCharts();
+}
+function chartZoomReset(id){ setZoom(id, 1); renderCharts() }
+function fmtZoom(z){
+  if(z === 1) return '1×';
+  if(z >= 1) return z.toFixed(z>=10?0:z>=2?1:2).replace(/\.?0+$/,'')+'×';
+  return (z*100).toFixed(0)+'%';
 }
 function applyYZoom(scaleOpts, vals, id){
   const zoom = getZoom(id);
   const lvlEl = el('lvl'+id.replace('chart',''));
-  if(lvlEl) lvlEl.textContent = (zoom===1?'1×':zoom===0.5?'½×':zoom+'×');
-  if(zoom === 1) return scaleOpts; // auto = laisse Chart.js décider
+  if(lvlEl) lvlEl.textContent = fmtZoom(zoom);
+  if(Math.abs(zoom - 1) < 0.001) return scaleOpts; // auto = laisse Chart.js décider
   const clean = vals.filter(v=>v!==null && v!==undefined && !isNaN(v));
   if(!clean.length) return scaleOpts;
   const min = Math.min(...clean), max = Math.max(...clean);
