@@ -655,19 +655,22 @@ async function syncPush(){
     setSyncStatus('✗ Hors ligne — sera resynchro plus tard','warn');
   }finally{ _isSyncing=false }
 }
-async function syncPull(){
+async function syncPull(silent){
   if(!syncEnabled() || _isSyncing) return;
   _isSyncing = true;
-  setSyncStatus('☁️ Pull en cours…');
+  if(!silent) setSyncStatus('☁️ Pull en cours…');
   try{
     const r = await fetch(SYNC_URL, { headers:{'x-sync-password':getSyncPw()} });
     if(r.status === 401){ setSyncStatus('🔒 Mot de passe invalide','bad'); _isSyncing=false; return false }
     if(!r.ok){ setSyncStatus('✗ Pull échec ('+r.status+')','bad'); _isSyncing=false; return false }
     const cloud = await r.json();
-    if(!cloud){ setSyncStatus('☁️ Aucune donnée distante (pousse depuis cet appareil)','warn'); _isSyncing=false; return false }
+    if(!cloud){
+      if(!silent) setSyncStatus('☁️ Aucune donnée distante (pousse depuis cet appareil)','warn');
+      _isSyncing=false; return false;
+    }
     const cloudT = Number(cloud.updatedAt||0);
     const localT = Number(state.updatedAt||0);
-    if(cloudT >= localT){
+    if(cloudT > localT){
       state = _sanitize(cloud);
       localStorage.setItem(LS_KEY, JSON.stringify(state));
       renderAll();
@@ -675,11 +678,15 @@ async function syncPull(){
       setSyncStatus('☁️ ⬇️ Récupéré '+new Date().toLocaleTimeString('fr-FR'),'ok');
       return true;
     } else {
-      setSyncStatus('ℹ️ Local plus récent — pousse pour mettre à jour le cloud','warn');
+      // No change : in silent mode, don't touch the status box
+      if(!silent){
+        if(cloudT === localT) setSyncStatus('☁️ ✓ Déjà à jour '+new Date().toLocaleTimeString('fr-FR'),'ok');
+        else setSyncStatus('ℹ️ Local plus récent — pousse pour mettre à jour le cloud','warn');
+      }
       return false;
     }
   }catch(e){
-    setSyncStatus('✗ Hors ligne','warn');
+    if(!silent) setSyncStatus('✗ Hors ligne','warn');
   }finally{ _isSyncing=false }
 }
 async function syncPullNow(){
@@ -736,26 +743,19 @@ function syncDisable(){
 function renderSyncBox(){
   const pw = getSyncPw();
   if(el('syncPw')) el('syncPw').value = pw;
-  if(syncEnabled()) setSyncStatus('☁️ Sync activée — pull auto toutes les 30s + au retour sur l\'app','ok');
+  if(syncEnabled()) setSyncStatus('☁️ Sync activée — pull au retour sur l\'app, ou tire vers le bas','ok');
   else setSyncStatus('☁️ Sync désactivée — saisis un mot de passe puis « Activer »','warn');
 }
 
-/* Auto-polling : silent pull every 30s when tab visible + on visibility/focus */
-const SYNC_POLL_MS = 30000;
-let _pollTimer = null;
-function startSyncPolling(){
-  stopSyncPolling();
-  if(!syncEnabled()) return;
-  _pollTimer = setInterval(()=>{
-    if(document.visibilityState === 'visible' && syncEnabled()) syncPull();
-  }, SYNC_POLL_MS);
-}
-function stopSyncPolling(){ if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null } }
+/* Auto-pull en mode silencieux : seulement au retour sur l'app (focus/visibility/online).
+   Pas de polling périodique pour ne pas spammer l'UI avec des effets. */
+function startSyncPolling(){ /* no-op : polling désactivé */ }
+function stopSyncPolling(){ /* no-op */ }
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState === 'visible' && syncEnabled()) syncPull();
+  if(document.visibilityState === 'visible' && syncEnabled()) syncPull(true);
 });
-window.addEventListener('focus', ()=>{ if(syncEnabled()) syncPull() });
-window.addEventListener('online', ()=>{ if(syncEnabled()){ syncPull(); schedulePush() } });
+window.addEventListener('focus', ()=>{ if(syncEnabled()) syncPull(true) });
+window.addEventListener('online', ()=>{ if(syncEnabled()){ syncPull(true); schedulePush() } });
 function active(){ return state.vehicles.find(v=>v.id===state.activeId) || state.vehicles[0] }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7) }
 
@@ -1889,8 +1889,8 @@ renderAll();
 switchTab('dashboard');
 // Pre-fetch today's rate so it's cached
 getRate('EUR','CHF'); getRate('CHF','EUR');
-// Pull from cloud at startup + start polling if sync is enabled
-if(syncEnabled()){ setTimeout(syncPull, 500); startSyncPolling() }
+// Pull silencieux au démarrage si sync activée (pas de polling auto)
+if(syncEnabled()) setTimeout(()=>syncPull(true), 500);
 
 /* ============= PULL-TO-REFRESH (mobile drag) ============= */
 (function(){
