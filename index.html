@@ -99,11 +99,11 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .row-item .amt{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .row-item .amt small{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
 
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0;overflow-y:auto}
-.modal-content{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:18px 16px calc(28px + env(safe-area-inset-bottom));border-top:1px solid var(--line);animation:slideUp .25s ease-out}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;overflow:hidden}
+.modal-content{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:16px 16px calc(20px + env(safe-area-inset-bottom));border-top:1px solid var(--line);animation:slideUp .25s ease-out;max-height:92vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.modal-content h3{margin:0 0 14px;font-size:17px;display:flex;align-items:center;justify-content:space-between}
-.modal-content h3 .close{background:transparent;border:0;color:var(--muted);font-size:24px;padding:0 4px}
+.modal-content h3{margin:0 -16px 14px;padding:0 16px 12px;font-size:17px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:-16px;background:var(--panel);border-bottom:1px solid var(--line);padding-top:6px;z-index:2}
+.modal-content h3 .close{background:transparent;border:0;color:var(--muted);font-size:26px;padding:0 4px;line-height:1}
 @media (min-width:640px){
   .modal{align-items:center;padding:20px}
   .modal-content{border-radius:18px;max-height:90vh}
@@ -686,20 +686,39 @@ async function syncEnable(){
   await syncPush();
   setSyncStatus('☁️ ✓ Sync active','ok');
   toast('Synchronisation activée');
+  startSyncPolling();
 }
 function syncDisable(){
   if(!confirm('Désactiver la synchro sur cet appareil ? (les données locales sont conservées)')) return;
   localStorage.removeItem(SYNC_PW_KEY);
   el('syncPw').value='';
+  stopSyncPolling();
   setSyncStatus('☁️ Sync désactivée','warn');
   toast('Sync désactivée');
 }
 function renderSyncBox(){
   const pw = getSyncPw();
   if(el('syncPw')) el('syncPw').value = pw;
-  if(syncEnabled()) setSyncStatus('☁️ Sync activée','ok');
+  if(syncEnabled()) setSyncStatus('☁️ Sync activée — pull auto toutes les 30s + au retour sur l\'app','ok');
   else setSyncStatus('☁️ Sync désactivée — saisis un mot de passe puis « Activer »','warn');
 }
+
+/* Auto-polling : silent pull every 30s when tab visible + on visibility/focus */
+const SYNC_POLL_MS = 30000;
+let _pollTimer = null;
+function startSyncPolling(){
+  stopSyncPolling();
+  if(!syncEnabled()) return;
+  _pollTimer = setInterval(()=>{
+    if(document.visibilityState === 'visible' && syncEnabled()) syncPull();
+  }, SYNC_POLL_MS);
+}
+function stopSyncPolling(){ if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null } }
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible' && syncEnabled()) syncPull();
+});
+window.addEventListener('focus', ()=>{ if(syncEnabled()) syncPull() });
+window.addEventListener('online', ()=>{ if(syncEnabled()){ syncPull(); schedulePush() } });
 function active(){ return state.vehicles.find(v=>v.id===state.activeId) || state.vehicles[0] }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7) }
 
@@ -1833,8 +1852,8 @@ renderAll();
 switchTab('dashboard');
 // Pre-fetch today's rate so it's cached
 getRate('EUR','CHF'); getRate('CHF','EUR');
-// Pull from cloud at startup if sync is enabled (silent)
-if(syncEnabled()) setTimeout(syncPull, 500);
+// Pull from cloud at startup + start polling if sync is enabled
+if(syncEnabled()){ setTimeout(syncPull, 500); startSyncPolling() }
 
 let _resizeTimer;
 window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{ if(!el('tab-dashboard').classList.contains('hide')) renderCharts() },200) });
