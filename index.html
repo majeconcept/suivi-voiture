@@ -393,11 +393,13 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
         <div><label>Réservoir (L)</label><input id="setTank" type="number" step="0.1" placeholder="55"/></div>
         <div><label>Date 1er CT</label><input id="setCtDate" type="date"/></div>
         <div><label>Nb de pneus par défaut</label><input id="setTireQty" type="number" inputmode="numeric"/></div>
+        <div><label>Conso min L/100 (filtre)</label><input id="setConsMin" type="number" step="0.1" inputmode="decimal"/></div>
+        <div><label>Conso max L/100 (filtre)</label><input id="setConsMax" type="number" step="0.1" inputmode="decimal"/></div>
       </div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn" onclick="saveVehicleSettings()">💾 Enregistrer</button>
       </div>
-      <p class="hint">Tous les coûts seront affichés et totalisés dans la devise principale. Si tu paies dans une autre devise, le taux du jour sera utilisé pour la conversion.</p>
+      <p class="hint">Les conso L/100 hors de la plage min/max sont ignorées des moyennes et graphiques (probables saisies incomplètes ou appoints non marqués). Le plein reste affiché dans la liste avec un badge ⚠.</p>
     </div>
 
     <div class="card">
@@ -586,12 +588,17 @@ function suggestionsForVehicle(v){
   return Array.from(set);
 }
 
+function defaultConsRange(type){
+  return type==='moto' ? {min:2.5, max:8} : {min:3, max:14};
+}
 function freshVehicle(name, type='auto', fuel='diesel', tireQty=4, currency){
   if(!currency) currency = APP_CTX.currency;
+  const cr = defaultConsRange(type);
   return {
     id: 'v_'+Math.random().toString(36).slice(2,9),
     name, type, fuel, tireQty, currency,
     plate:'', buyDate:today(), startKm:0, ctDate:'', tank:type==='moto'?14:55,
+    consMin: cr.min, consMax: cr.max, filterAberrant: true,
     fillups:[], maintenance:[], tires:[], purchases:[],
     maintConfig: PRESET_MAINT[presetKey(type,fuel)].map(m=>({...m}))
   };
@@ -640,6 +647,12 @@ function _sanitize(s){
     if(!v.currency) v.currency='CHF';
     if(!v.tireQty) v.tireQty=v.type==='moto'?2:4;
     if(!v.maintConfig) v.maintConfig=PRESET_MAINT[presetKey(v.type,v.fuel)].map(m=>({...m}));
+    if(v.consMin===undefined || v.consMax===undefined){
+      const cr = defaultConsRange(v.type);
+      v.consMin = v.consMin||cr.min;
+      v.consMax = v.consMax||cr.max;
+    }
+    if(v.filterAberrant===undefined) v.filterAberrant = true;
     // migrate fillups
     v.fillups.forEach(f=>{
       if(!f.currency) f.currency=v.currency;
@@ -832,7 +845,7 @@ function money(n, cur){
   }catch(e){ return fmt(n,2)+' '+cur }
 }
 function moneySym(cur){ return cur==='EUR'?'€':cur||'CHF' }
-function fmtDate(d){ if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}) }
+function fmtDate(d){ if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}) }
 function fmtDateFull(d){ if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}) }
 function monthLabel(d){ const dt=new Date(d); return dt.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}) }
 function monthKey(d){ const dt=new Date(d); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0') }
@@ -946,27 +959,51 @@ function currentKm(){
 }
 function totalDistance(){ return Math.max(0, currentKm() - (active().startKm||0)) }
 function sortedFillups(){ return [...active().fillups].sort((a,b)=>(a.km||0)-(b.km||0) || a.date.localeCompare(b.date)) }
-function consumptionPerFillup(){
+function isAberrantCons(c, v){
+  v = v || active();
+  if(!v.filterAberrant) return false;
+  if(c===null||c===undefined||isNaN(c)) return false;
+  return c < (v.consMin||0) || c > (v.consMax||999);
+}
+function consumptionPerFillup(includeAberrant){
   const sorted = sortedFillups(); const out=[];
   let segLiters=0, segStartKm=null;
+  const v = active();
   for(let i=0;i<sorted.length;i++){
     const f = sorted[i];
     if(segStartKm===null){ segStartKm=f.km; segLiters=0; continue }
     segLiters += Number(f.liters||0);
     if(f.fullTank){
       const dist = f.km - segStartKm;
-      if(dist>0 && segLiters>0) out.push({date:f.date,km:f.km,cons:(segLiters/dist)*100,dist,liters:segLiters});
+      if(dist>0 && segLiters>0){
+        const cons = (segLiters/dist)*100;
+        const aberrant = isAberrantCons(cons, v);
+        if(includeAberrant || !aberrant){
+          out.push({date:f.date,km:f.km,cons,dist,liters:segLiters,aberrant,id:f.id});
+        }
+      }
       segStartKm = f.km; segLiters = 0;
     }
   }
   return out;
 }
 function avgConsumption(){
-  const arr = consumptionPerFillup();
-  if(!arr.length) return null;
-  const totL = arr.reduce((s,x)=>s+x.liters,0);
-  const totD = arr.reduce((s,x)=>s+x.dist,0);
-  return totD>0 ? (totL/totD)*100 : null;
+  /* Conso moyenne lifetime = somme de TOUS les litres entre 1er et dernier plein complet
+     divisée par la distance entre ces 2 pleins.
+     Inclut appoints ET pleins "aberrants" (le calcul global lisse naturellement). */
+  const sorted = sortedFillups();
+  const fulls = sorted.filter(f=>f.fullTank);
+  if(fulls.length < 2) return null;
+  const first = fulls[0];
+  const last = fulls[fulls.length-1];
+  let totalLiters = 0;
+  for(const f of sorted){
+    if(f.km > first.km && f.km <= last.km){
+      totalLiters += Number(f.liters||0);
+    }
+  }
+  const dist = last.km - first.km;
+  return dist>0 ? (totalLiters/dist)*100 : null;
 }
 function totalFuelCost(){ return active().fillups.reduce((s,x)=>s+Number(x.totalConverted||0),0) }
 function totalAdblueCost(){ return active().fillups.reduce((s,x)=>s+Number(x.adblueCostConverted||0),0) }
@@ -1516,7 +1553,8 @@ function renderFuelList(){
   for(let i=1;i<sortedAsc.length;i++){
     const cur=sortedAsc[i], prev=sortedAsc[i-1];
     const dist=cur.km-prev.km;
-    consMap[cur.id]={dist, conso:(cur.fullTank&&dist>0)?(cur.liters/dist)*100:null};
+    const conso = (cur.fullTank&&dist>0)?(cur.liters/dist)*100:null;
+    consMap[cur.id]={dist, conso, aberrant: conso!==null && isAberrantCons(conso, v)};
   }
   wrap.innerHTML = arr.map(f=>{
     const meta = consMap[f.id];
@@ -1529,7 +1567,12 @@ function renderFuelList(){
     const distLine = meta&&meta.dist ? `<div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:2px">+${fmtInt(meta.dist)} km</div>` : '';
     const stationLine = (f.station||f.location) ? `<div class="meta" style="color:#e8eefc;font-weight:500">${f.station?'⛽ '+escapeHtml(f.station):''}${f.station&&f.location?' · ':''}${f.location?'📍 '+escapeHtml(f.location):''}</div>` : '';
     const consNotesParts = [];
-    if(meta&&meta.conso) consNotesParts.push(fmt(meta.conso,2)+' L/100');
+    if(meta&&meta.conso){
+      const consTxt = fmt(meta.conso,2)+' L/100';
+      consNotesParts.push(meta.aberrant
+        ? `<span style="color:#fbbf24">⚠ ${consTxt} (ignoré — saisie incomplète ?)</span>`
+        : consTxt);
+    }
     if(f.notes) consNotesParts.push(escapeHtml(f.notes));
     const consNotesLine = consNotesParts.length ? `<div class="meta">${consNotesParts.join(' · ')}</div>` : '';
     return `<div class="row-item" onclick='openFillupForm(${JSON.stringify(f).replace(/'/g,"&#39;")})'>
@@ -1760,6 +1803,8 @@ function loadSettingsToForm(){
   el('setCtDate').value=v.ctDate||'';
   el('setTank').value=v.tank||'';
   el('setTireQty').value=v.tireQty||4;
+  if(el('setConsMin')) el('setConsMin').value=v.consMin!=null?v.consMin:'';
+  if(el('setConsMax')) el('setConsMax').value=v.consMax!=null?v.consMax:'';
   const segs = {setType:v.type, setFuel:v.fuel, setCurrency:v.currency};
   Object.entries(segs).forEach(([id,val])=>{
     const grp = el(id);
@@ -1779,6 +1824,10 @@ function saveVehicleSettings(){
   v.ctDate = el('setCtDate').value;
   v.tank = parseFloat(el('setTank').value)||0;
   v.tireQty = parseFloat(el('setTireQty').value)||4;
+  const cmin = parseFloat(el('setConsMin')?.value);
+  const cmax = parseFloat(el('setConsMax')?.value);
+  if(!isNaN(cmin)) v.consMin = cmin;
+  if(!isNaN(cmax)) v.consMax = cmax;
   v.type = el('setType').querySelector('button.active').dataset.v;
   v.fuel = el('setFuel').querySelector('button.active').dataset.v;
   v.currency = el('setCurrency').querySelector('button.active').dataset.v;
