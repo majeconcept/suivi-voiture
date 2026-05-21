@@ -53,12 +53,18 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
   nav.tabs button .ic{font-size:17px}
 }
 
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
-.card h2{margin:0 0 12px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:10px}
+.card h2{margin:0 0 10px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card h2 .pill{font-size:11px;background:var(--panel2);color:var(--muted);padding:2px 8px;border-radius:99px;font-weight:500}
 @media (max-width:480px){
-  .card{padding:13px;margin-bottom:10px}
-  .card h2{font-size:14px;margin-bottom:10px}
+  .card{padding:12px;margin-bottom:8px;border-radius:12px}
+  .card h2{font-size:13.5px;margin-bottom:8px;letter-spacing:-0.01em}
+}
+/* tighter vertical rhythm between adjacent cards/grids on dashboard */
+#tab-dashboard .grid + .card{margin-top:2px}
+#tab-dashboard .grid{margin-bottom:8px}
+@media (max-width:480px){
+  #tab-dashboard .grid{margin-bottom:6px}
 }
 
 .grid{display:grid;gap:10px}
@@ -70,23 +76,33 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
   .grid{gap:8px}
 }
 
-.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;min-width:0;display:flex;flex-direction:column;justify-content:center}
 .kpi .lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:6px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi .sub{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi.accent .val{color:var(--accent2)}
-@media (max-width:380px){
-  .kpi{padding:12px}
-  .kpi .val{font-size:18px}
+@media (max-width:480px){
+  .kpi{padding:11px 12px}
+  .kpi .val{font-size:19px}
+  .kpi .lab{font-size:9.5px}
+  .kpi .sub{font-size:10.5px}
+}
+@media (max-width:360px){
+  .kpi .val{font-size:17px}
 }
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--accent);color:#fff;border-radius:10px;padding:11px 14px;font-weight:600;letter-spacing:.01em;transition:.15s}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--accent);color:#fff;border-radius:10px;padding:12px 16px;font-weight:600;letter-spacing:.01em;transition:.15s;min-height:44px}
 .btn:hover{filter:brightness(1.1)}
 .btn:active{transform:scale(.98)}
 .btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
 .btn.danger{background:var(--bad)}
-.btn.small{padding:7px 10px;font-size:12px;font-weight:500;border-radius:8px}
+.btn.small{padding:7px 10px;font-size:12px;font-weight:500;border-radius:8px;min-height:0}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn-row > .btn:not(.small){flex:1 1 auto;min-width:140px}
+@media (max-width:480px){
+  .btn-row > .btn:not(.small){min-width:0;width:100%}
+  .btn-row > .btn.ghost:not(.small){width:auto;flex:1 1 calc(50% - 4px)}
+}
 
 .fab{position:fixed;right:18px;bottom:calc(78px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:0;font-size:26px;line-height:1;box-shadow:0 8px 24px rgba(59,130,246,.45);z-index:40;display:flex;align-items:center;justify-content:center;transition:.15s}
 .fab:active{transform:scale(.92)}
@@ -115,9 +131,10 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .alert.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:#fca5a5}
 
 .chart-wrap{position:relative;height:240px}
-@media (max-width:640px){.chart-wrap{height:210px}}
+@media (max-width:640px){.chart-wrap{height:190px}}
+@media (max-width:380px){.chart-wrap{height:170px}}
 .chart-wrap.donut{height:280px}
-@media (max-width:640px){.chart-wrap.donut{height:260px}}
+@media (max-width:640px){.chart-wrap.donut{height:250px}}
 
 table.simple{width:100%;border-collapse:collapse;font-size:13px}
 table.simple th,table.simple td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line)}
@@ -144,13 +161,23 @@ table.simple td{font-variant-numeric:tabular-nums}
 .maint-item.bad .bar > span{background:var(--bad)}
 
 .seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
-.seg button{flex:1;background:transparent;border:0;color:var(--muted);padding:7px 8px;border-radius:7px;font-size:13px;font-weight:500}
-.seg button.active{background:var(--accent);color:#fff}
+.seg button{flex:1;background:transparent;border:0;color:#cbd5ec;padding:9px 6px;border-radius:7px;font-size:13px;font-weight:500;min-height:38px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s, color .15s}
+.seg button:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.seg button.active{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}
+.seg button.active:hover{filter:brightness(1.05)}
 
 .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
 .fxhint{font-size:11px;color:var(--accent2);margin-top:6px;font-variant-numeric:tabular-nums}
 
 .toast{position:fixed;bottom:calc(150px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:12px 18px;border-radius:99px;box-shadow:var(--shadow);z-index:200;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;animation:fadeIn .2s ease-out;max-width:90vw}
+
+/* Pull to refresh indicator */
+#ptr{position:fixed;top:calc(env(safe-area-inset-top) + 6px);left:50%;transform:translate(-50%,-80px);background:var(--panel);border:1px solid var(--line);padding:9px 16px;border-radius:99px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;z-index:60;opacity:0;box-shadow:0 4px 16px rgba(0,0,0,.4);pointer-events:none;color:var(--text);white-space:nowrap}
+#ptr.active{transition:transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s}
+#ptr .arrow{display:inline-block;transition:transform .2s;font-size:14px}
+#ptr.ready .arrow{transform:rotate(180deg)}
+@keyframes ptrspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+#ptr .spin{display:inline-block;animation:ptrspin 1s linear infinite}
 @keyframes fadeIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 
 .vehicle-row{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer}
@@ -391,6 +418,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
 </nav>
 
 <div id="modalRoot"></div>
+<div id="ptr"><span class="arrow">⬇️</span><span class="lbl">Tire pour rafraîchir</span></div>
 
 <script>
 /* ============= CONSTANTS ============= */
@@ -1854,6 +1882,90 @@ switchTab('dashboard');
 getRate('EUR','CHF'); getRate('CHF','EUR');
 // Pull from cloud at startup + start polling if sync is enabled
 if(syncEnabled()){ setTimeout(syncPull, 500); startSyncPolling() }
+
+/* ============= PULL-TO-REFRESH (mobile drag) ============= */
+(function(){
+  const ptr = el('ptr');
+  if(!ptr) return;
+  const THRESHOLD = 75;
+  let startY=0, delta=0, pulling=false, refreshing=false;
+
+  function setLabel(text, arrowChar){
+    const a = ptr.querySelector('.arrow'); const l = ptr.querySelector('.lbl');
+    if(arrowChar) a.textContent = arrowChar;
+    l.textContent = text;
+  }
+
+  document.addEventListener('touchstart', e=>{
+    if(refreshing) return;
+    if(window.scrollY > 0) return;
+    if(el('modalRoot').children.length>0) return; // modal ouvert : skip
+    startY = e.touches[0].clientY;
+    delta = 0; pulling = true;
+    ptr.classList.remove('active');
+  }, {passive:true});
+
+  document.addEventListener('touchmove', e=>{
+    if(!pulling || refreshing) return;
+    if(window.scrollY > 0){ reset(); return }
+    const dy = e.touches[0].clientY - startY;
+    if(dy <= 0) return;
+    delta = Math.min(dy * 0.55, 140); // friction
+    const offset = Math.max(0, delta - 80);
+    ptr.style.transform = `translate(-50%, ${offset}px)`;
+    ptr.style.opacity = Math.min(delta/60, 1);
+    if(delta >= THRESHOLD){
+      if(!ptr.classList.contains('ready')){
+        ptr.classList.add('ready');
+        setLabel('Relâche pour rafraîchir');
+      }
+    } else {
+      if(ptr.classList.contains('ready')){
+        ptr.classList.remove('ready');
+        setLabel('Tire pour rafraîchir', '⬇️');
+      }
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', async ()=>{
+    if(!pulling) return;
+    pulling = false;
+    ptr.classList.add('active');
+    if(delta >= THRESHOLD && !refreshing){
+      refreshing = true;
+      ptr.classList.remove('ready');
+      ptr.querySelector('.arrow').outerHTML = '<span class="arrow spin">⏳</span>';
+      setLabel('Rafraîchissement…');
+      ptr.style.transform = 'translate(-50%, 12px)';
+      ptr.style.opacity = '1';
+      try{
+        if(syncEnabled()) await syncPull();
+        else renderAll();
+      }catch(e){}
+      setTimeout(()=>{
+        ptr.querySelector('.arrow').outerHTML = '<span class="arrow">✓</span>';
+        setLabel('À jour');
+        setTimeout(()=>{
+          reset();
+          // restore initial arrow
+          ptr.querySelector('.arrow').outerHTML = '<span class="arrow">⬇️</span>';
+          refreshing = false;
+        }, 700);
+      }, 200);
+    } else {
+      reset();
+    }
+    delta = 0;
+  });
+
+  function reset(){
+    pulling = false;
+    ptr.classList.add('active');
+    ptr.classList.remove('ready');
+    ptr.style.transform = 'translate(-50%, -80px)';
+    ptr.style.opacity = '0';
+  }
+})();
 
 let _resizeTimer;
 window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{ if(!el('tab-dashboard').classList.contains('hide')) renderCharts() },200) });
