@@ -102,6 +102,11 @@ nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:10px}
 .card h2{margin:0 0 10px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card h2 .pill{font-size:11px;background:var(--panel2);color:var(--muted);padding:2px 8px;border-radius:99px;font-weight:500}
+.zoomctl{margin-left:auto;display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:2px}
+.zoomctl button{background:transparent;border:0;color:var(--muted);width:26px;height:26px;border-radius:5px;font-size:14px;font-weight:600;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+.zoomctl button:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.zoomctl button:active{transform:scale(.9)}
+.zoomctl .lvl{font-size:11px;color:var(--muted);min-width:24px;text-align:center;font-variant-numeric:tabular-nums}
 @media (max-width:480px){
   .card{padding:12px;margin-bottom:8px;border-radius:12px}
   .card h2{font-size:13.5px;margin-bottom:8px;letter-spacing:-0.01em}
@@ -299,17 +304,23 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
     </div>
 
     <div class="card">
-      <h2>📊 Consommation au fil du temps <span class="pill">L/100km</span></h2>
+      <h2>📊 Consommation au fil du temps <span class="pill">L/100km</span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartCons',-1)" title="Élargir">−</button><span class="lvl" id="lvlCons">1×</span><button onclick="chartZoomChange('chartCons',1)" title="Resserrer">+</button></span>
+      </h2>
       <div class="chart-wrap"><canvas id="chartCons"></canvas></div>
     </div>
 
     <div class="card">
-      <h2>⛽ Prix du carburant <span class="pill" id="lblPriceUnit">/L</span></h2>
+      <h2>⛽ Prix du carburant <span class="pill" id="lblPriceUnit">/L</span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartPrice',-1)" title="Élargir">−</button><span class="lvl" id="lvlPrice">1×</span><button onclick="chartZoomChange('chartPrice',1)" title="Resserrer">+</button></span>
+      </h2>
       <div class="chart-wrap"><canvas id="chartPrice"></canvas></div>
     </div>
 
     <div class="card">
-      <h2>💸 Dépenses mensuelles <span class="pill" id="lblMonthlyUnit">CHF</span></h2>
+      <h2>💸 Dépenses mensuelles <span class="pill" id="lblMonthlyUnit">CHF</span>
+        <span class="zoomctl"><button onclick="chartZoomChange('chartMonthly',-1)" title="Élargir">−</button><span class="lvl" id="lvlMonthly">1×</span><button onclick="chartZoomChange('chartMonthly',1)" title="Resserrer">+</button></span>
+      </h2>
       <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
     </div>
 
@@ -1714,6 +1725,32 @@ function renderTopAlerts(){
 /* ============= CHARTS ============= */
 let _charts = {};
 function destroyCharts(){ Object.values(_charts).forEach(c=>{try{c.destroy()}catch(e){}}); _charts={} }
+
+/* Y-axis zoom controls — 5 levels persisted per chart in localStorage */
+const ZOOM_LEVELS = [0.5, 1, 2, 4, 8];
+const ZOOM_LS_KEY = 'chart_zoom_v1';
+function loadZoom(){ try{ return JSON.parse(localStorage.getItem(ZOOM_LS_KEY)||'{}') }catch(e){ return {} } }
+function getZoom(id){ const z = loadZoom(); return z[id] || 1 }
+function setZoom(id, val){ const z = loadZoom(); z[id]=val; localStorage.setItem(ZOOM_LS_KEY, JSON.stringify(z)) }
+function chartZoomChange(id, dir){
+  const cur = getZoom(id);
+  let i = ZOOM_LEVELS.indexOf(cur); if(i===-1) i = 1;
+  i = Math.max(0, Math.min(ZOOM_LEVELS.length-1, i + dir));
+  setZoom(id, ZOOM_LEVELS[i]);
+  renderCharts();
+}
+function applyYZoom(scaleOpts, vals, id){
+  const zoom = getZoom(id);
+  const lvlEl = el('lvl'+id.replace('chart',''));
+  if(lvlEl) lvlEl.textContent = (zoom===1?'1×':zoom===0.5?'½×':zoom+'×');
+  if(zoom === 1) return scaleOpts; // auto = laisse Chart.js décider
+  const clean = vals.filter(v=>v!==null && v!==undefined && !isNaN(v));
+  if(!clean.length) return scaleOpts;
+  const min = Math.min(...clean), max = Math.max(...clean);
+  const center = (min+max)/2;
+  const halfRange = ((max-min)||1)/2 / zoom;
+  return { ...scaleOpts, min: center - halfRange, max: center + halfRange };
+}
 function getCanvas(id){
   let wrap = document.querySelector('[data-cv="'+id+'"]');
   if(!wrap){ const c = el(id); if(c){ wrap = c.parentElement; wrap.setAttribute('data-cv',id) } }
@@ -1739,24 +1776,28 @@ function renderCharts(){
   el('lblMonthlyUnit').textContent = v.currency;
 
   if(cs.length){
-    const cv = getCanvas('chartCons'); if(cv)
+    const cv = getCanvas('chartCons'); if(cv){
+    const yData = cs.map(x=>+x.cons.toFixed(2));
+    const yScale = applyYZoom({ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}}, yData, 'chartCons');
     _charts.cons = new Chart(cv,{
       type:'line',
-      data:{labels:cs.map(x=>fmtDateFull(x.date)),datasets:[{label:'L/100km',data:cs.map(x=>+x.cons.toFixed(2)),borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,.15)',tension:.3,fill:true,pointRadius:3,pointHoverRadius:5}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+' L/100km'}}},scales:{x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},y:{ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}}}}
+      data:{labels:cs.map(x=>fmtDateFull(x.date)),datasets:[{label:'L/100km',data:yData,borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,.15)',tension:.3,fill:true,pointRadius:3,pointHoverRadius:5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+' L/100km'}}},scales:{x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},y:yScale}}
     });
-  } else showChartEmpty('chartCons','Ajoute 2 pleins complets pour voir la conso');
+  }} else showChartEmpty('chartCons','Ajoute 2 pleins complets pour voir la conso');
 
   // Price chart: in vehicle currency (converted)
   const sorted = sortedFillups().filter(f=>f.pricePerLiter>0);
   if(sorted.length){
-    const cv = getCanvas('chartPrice'); if(cv)
+    const cv = getCanvas('chartPrice'); if(cv){
+    const yData = sorted.map(x=>+priceConverted(x).toFixed(3));
+    const yScale = applyYZoom({ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}}, yData, 'chartPrice');
     _charts.price = new Chart(cv,{
       type:'line',
-      data:{labels:sorted.map(x=>fmtDateFull(x.date)),datasets:[{label:moneySym(v.currency)+'/L',data:sorted.map(x=>+priceConverted(x).toFixed(3)),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.15)',tension:.3,fill:true,pointRadius:2}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(3)+' '+moneySym(v.currency)+'/L'}}},scales:{x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},y:{ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}}}}
+      data:{labels:sorted.map(x=>fmtDateFull(x.date)),datasets:[{label:moneySym(v.currency)+'/L',data:yData,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.15)',tension:.3,fill:true,pointRadius:2}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(3)+' '+moneySym(v.currency)+'/L'}}},scales:{x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},y:yScale}}
     });
-  } else showChartEmpty('chartPrice','Pas encore de prix saisis');
+  }} else showChartEmpty('chartPrice','Pas encore de prix saisis');
 
   // Monthly: in vehicle currency
   const months = {};
@@ -1768,13 +1809,16 @@ function renderCharts(){
   const keys = Object.keys(months).sort();
   if(keys.length){
     const palette = {Carburant:'#3b82f6',AdBlue:'#22d3ee',Entretien:'#ef4444',Pneus:'#10b981',Achats:'#a855f7'};
-    const cv = getCanvas('chartMonthly'); if(cv)
+    const cv = getCanvas('chartMonthly'); if(cv){
+    // For zoom : use monthly totals (stacked)
+    const monthlyTotals = keys.map(k=>['Carburant','AdBlue','Entretien','Pneus','Achats'].reduce((s,c)=>s+(months[k][c]||0),0));
+    const yScale = applyYZoom({stacked:true,ticks:{color:tickColor,font:baseFont,callback:vv=>vv+(v.currency==='EUR'?'€':'')},grid:{color:gridColor}}, monthlyTotals, 'chartMonthly');
     _charts.monthly = new Chart(cv,{
       type:'bar',
       data:{labels:keys.map(k=>monthLabel(k+'-01')),datasets:['Carburant','AdBlue','Entretien','Pneus','Achats'].map(c=>({label:c,data:keys.map(k=>+(months[k][c]).toFixed(2)),backgroundColor:palette[c],borderWidth:0,borderRadius:4}))},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:tickColor,font:baseFont,boxWidth:12,padding:10}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.parsed.y, v.currency)}}},scales:{x:{stacked:true,ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}},y:{stacked:true,ticks:{color:tickColor,font:baseFont,callback:vv=>vv+(v.currency==='EUR'?'€':'')},grid:{color:gridColor}}}}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:tickColor,font:baseFont,boxWidth:12,padding:10}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+money(c.parsed.y, v.currency)}}},scales:{x:{stacked:true,ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}},y:yScale}}
     });
-  } else showChartEmpty('chartMonthly','Pas encore de dépenses');
+  }} else showChartEmpty('chartMonthly','Pas encore de dépenses');
 
   const pieData = [
     {l:'Carburant',v:totalFuelCost(),c:'#3b82f6'},
