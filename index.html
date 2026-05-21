@@ -1,0 +1,1214 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<title>Suivi Voiture</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0b1220; --panel:#111a2e; --panel2:#162038; --line:#1f2c4a;
+  --text:#e8eefc; --muted:#90a0c4; --accent:#3b82f6; --accent2:#22d3ee;
+  --ok:#10b981; --warn:#f59e0b; --bad:#ef4444; --gold:#eab308;
+  --radius:14px; --shadow:0 6px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+body{min-height:100vh;padding-bottom:90px}
+a{color:var(--accent2);text-decoration:none}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px 2px;letter-spacing:.02em;text-transform:uppercase}
+.hide{display:none!important}
+
+header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,rgba(11,18,32,.95),rgba(11,18,32,.85));backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hbar{display:flex;align-items:center;gap:10px;padding:14px 16px;max-width:1100px;margin:0 auto}
+.hbar h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.01em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar .km{font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent2);font-size:14px}
+.hbar .car{font-size:12px;color:var(--muted)}
+
+main{max-width:1100px;margin:0 auto;padding:16px}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(11,18,32,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 4px env(safe-area-inset-bottom)}
+nav.tabs .row{display:flex;justify-content:space-between;max-width:680px;margin:0 auto}
+nav.tabs button{flex:1;background:transparent;border:0;color:var(--muted);padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;border-radius:10px;transition:.15s}
+nav.tabs button .ic{font-size:20px;line-height:1}
+nav.tabs button.active{color:var(--text)}
+nav.tabs button.active .ic{transform:translateY(-2px);filter:drop-shadow(0 4px 8px rgba(59,130,246,.5))}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+.card h2{margin:0 0 12px 0;font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.card h2 .pill{font-size:11px;background:var(--panel2);color:var(--muted);padding:2px 8px;border-radius:99px;font-weight:500}
+
+.grid{display:grid;gap:10px}
+.grid.cols2{grid-template-columns:repeat(2,1fr)}
+.grid.cols3{grid-template-columns:repeat(3,1fr)}
+.grid.cols4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:640px){
+  .grid.cols3,.grid.cols4{grid-template-columns:repeat(2,1fr)}
+}
+
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi .val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.kpi.accent .val{color:var(--accent2)}
+.kpi.ok .val{color:var(--ok)}
+.kpi.warn .val{color:var(--warn)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--accent);color:#fff;border-radius:10px;padding:11px 14px;font-weight:600;letter-spacing:.01em;transition:.15s}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:var(--bad)}
+.btn.gold{background:var(--gold);color:#1a1a1a}
+.btn.small{padding:7px 10px;font-size:12px;font-weight:500;border-radius:8px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+
+.fab{position:fixed;right:18px;bottom:84px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:0;font-size:26px;line-height:1;box-shadow:0 8px 24px rgba(59,130,246,.45);z-index:40;display:flex;align-items:center;justify-content:center;transition:.15s}
+.fab:active{transform:scale(.92)}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.row-item{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.row-item .dt{font-size:11px;color:var(--muted);min-width:62px}
+.row-item .ttl{font-weight:600;font-size:14px}
+.row-item .meta{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.row-item .amt{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.row-item .amt small{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+.row-item .del{background:transparent;border:0;color:var(--muted);font-size:18px;padding:4px;border-radius:6px}
+.row-item .del:hover{color:var(--bad);background:rgba(239,68,68,.1)}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0;overflow-y:auto}
+.modal-content{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:18px 16px 30px;border-top:1px solid var(--line);animation:slideUp .25s ease-out}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-content h3{margin:0 0 14px;font-size:17px;display:flex;align-items:center;justify-content:space-between}
+.modal-content h3 .close{background:transparent;border:0;color:var(--muted);font-size:24px;padding:0 4px}
+@media (min-width:640px){
+  .modal{align-items:center;padding:20px}
+  .modal-content{border-radius:18px;max-height:90vh}
+}
+
+.alert{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;border:1px solid}
+.alert.ok{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.3);color:#6ee7b7}
+.alert.warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.3);color:#fcd34d}
+.alert.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:#fca5a5}
+.alert .ic{font-size:18px}
+
+.chart-wrap{position:relative;height:240px}
+@media (max-width:640px){.chart-wrap{height:200px}}
+
+table.simple{width:100%;border-collapse:collapse;font-size:13px}
+table.simple th,table.simple td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line)}
+table.simple th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+table.simple td{font-variant-numeric:tabular-nums}
+
+.empty{text-align:center;padding:30px 10px;color:var(--muted)}
+.empty .ic{font-size:42px;margin-bottom:8px;opacity:.6}
+.empty .ttl{font-weight:600;color:var(--text);margin-bottom:4px}
+
+.maint-item{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:8px}
+.maint-item.ok{border-color:rgba(16,185,129,.3)}
+.maint-item.warn{border-color:rgba(245,158,11,.4)}
+.maint-item.bad{border-color:rgba(239,68,68,.4)}
+.maint-item .nm{font-weight:600}
+.maint-item .info{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.maint-item .stat{text-align:right;font-size:12px;font-weight:600}
+.maint-item.ok .stat{color:var(--ok)}
+.maint-item.warn .stat{color:var(--warn)}
+.maint-item.bad .stat{color:var(--bad)}
+.maint-item .bar{grid-column:1/-1;height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:6px}
+.maint-item .bar > span{display:block;height:100%;background:var(--ok);transition:width .3s}
+.maint-item.warn .bar > span{background:var(--warn)}
+.maint-item.bad .bar > span{background:var(--bad)}
+
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;background:transparent;border:0;color:var(--muted);padding:7px 8px;border-radius:7px;font-size:13px;font-weight:500}
+.seg button.active{background:var(--accent);color:#fff}
+
+.hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+.toast{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:12px 18px;border-radius:99px;box-shadow:var(--shadow);z-index:200;font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;animation:fadeIn .2s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+
+.muted{color:var(--muted)}
+.right{text-align:right}
+.tag{display:inline-block;font-size:10px;background:var(--panel2);color:var(--muted);padding:2px 7px;border-radius:99px;letter-spacing:.05em;text-transform:uppercase;margin-left:6px}
+.tag.season-ete{background:rgba(234,179,8,.15);color:#fcd34d}
+.tag.season-hiver{background:rgba(59,130,246,.15);color:#93c5fd}
+.tag.full{background:rgba(16,185,129,.15);color:#6ee7b7}
+.tag.part{background:rgba(245,158,11,.15);color:#fcd34d}
+.tag.jc{background:rgba(34,211,238,.15);color:#67e8f9}
+
+.split{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hbar">
+    <span style="font-size:22px">🚗</span>
+    <h1>
+      <span id="hVehicleName">Ma voiture</span>
+      <span class="car" id="hVehicleSub"></span>
+    </h1>
+    <span class="km" id="hKm">— km</span>
+  </div>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard">
+    <div id="alertsBox"></div>
+
+    <div class="grid cols2">
+      <div class="kpi accent">
+        <div class="lab">Conso moyenne</div>
+        <div class="val"><span id="kAvgCons">—</span></div>
+        <div class="sub">L / 100 km</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">Coût / km</div>
+        <div class="val"><span id="kCostKm">—</span></div>
+        <div class="sub">€ / km (carburant)</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">Total dépensé</div>
+        <div class="val"><span id="kTotalSpent">—</span></div>
+        <div class="sub">tout confondu</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">Km parcourus</div>
+        <div class="val"><span id="kTotalDist">—</span></div>
+        <div class="sub">depuis l'achat</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Consommation au fil du temps <span class="pill">L/100km</span></h2>
+      <div class="chart-wrap"><canvas id="chartCons"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>⛽ Prix du gazole <span class="pill">€/L</span></h2>
+      <div class="chart-wrap"><canvas id="chartPrice"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>💸 Dépenses mensuelles <span class="pill">€</span></h2>
+      <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>📋 Répartition des dépenses</h2>
+      <div class="chart-wrap" style="height:220px"><canvas id="chartPie"></canvas></div>
+    </div>
+  </section>
+
+  <!-- CARBURANT -->
+  <section id="tab-carburant" class="hide">
+    <div class="card">
+      <h2>⛽ Pleins <span class="pill" id="cFuelCount">0</span></h2>
+      <div id="fuelList" class="list"></div>
+    </div>
+  </section>
+
+  <!-- ENTRETIEN -->
+  <section id="tab-entretien" class="hide">
+    <div class="card">
+      <h2>🔧 Alertes & échéances</h2>
+      <div id="maintAlerts" class="list"></div>
+      <hr class="sep"/>
+      <div class="btn-row">
+        <button class="btn ghost small" onclick="openMaintSettings()">⚙️ Régler les intervalles</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📝 Historique entretien <span class="pill" id="cMaintCount">0</span></h2>
+      <div id="maintList" class="list"></div>
+    </div>
+  </section>
+
+  <!-- PNEUS -->
+  <section id="tab-pneus" class="hide">
+    <div class="card">
+      <h2>🛞 Pneus <span class="pill" id="cTireCount">0</span></h2>
+      <div id="tireList" class="list"></div>
+    </div>
+  </section>
+
+  <!-- ACHATS -->
+  <section id="tab-achats" class="hide">
+    <div class="card">
+      <h2>🛍️ Achats & accessoires <span class="pill" id="cBuyCount">0</span></h2>
+      <div id="buyList" class="list"></div>
+    </div>
+  </section>
+
+  <!-- REGLAGES -->
+  <section id="tab-reglages" class="hide">
+    <div class="card">
+      <h2>🚘 Véhicule</h2>
+      <div class="grid cols2">
+        <div><label>Nom / modèle</label><input id="setName" placeholder="Ex: Peugeot 308 Diesel"/></div>
+        <div><label>Plaque</label><input id="setPlate" placeholder="AB-123-CD"/></div>
+        <div><label>Date d'achat</label><input id="setBuyDate" type="date"/></div>
+        <div><label>Km à l'achat</label><input id="setStartKm" type="number" inputmode="numeric" placeholder="0"/></div>
+        <div><label>Date 1er Contrôle Technique</label><input id="setCtDate" type="date"/></div>
+        <div><label>Réservoir (L)</label><input id="setTank" type="number" step="0.1" placeholder="55"/></div>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" onclick="saveSettings()">💾 Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📂 Données</h2>
+      <div class="btn-row">
+        <button class="btn ghost" onclick="exportXLSX()">📥 Exporter en Excel</button>
+        <label class="btn ghost" style="cursor:pointer">
+          📤 Importer Excel
+          <input type="file" id="importFile" accept=".xlsx,.xls" onchange="importXLSX(event)" style="display:none"/>
+        </label>
+        <button class="btn ghost" onclick="exportJSON()">🗂️ Sauvegarde JSON</button>
+        <label class="btn ghost" style="cursor:pointer">
+          ♻️ Restaurer JSON
+          <input type="file" id="importJsonFile" accept=".json" onchange="importJSON(event)" style="display:none"/>
+        </label>
+      </div>
+      <p class="hint">Tes données restent sur cet appareil (localStorage). Pense à exporter régulièrement.</p>
+      <hr class="sep"/>
+      <button class="btn danger" onclick="resetAll()">🗑️ Tout réinitialiser</button>
+    </div>
+
+    <div class="card">
+      <h2>ℹ️ À propos</h2>
+      <p class="muted" style="font-size:13px;line-height:1.5;margin:0">
+        Suivi voiture — version diesel. Page autonome, fonctionne hors-ligne après le premier chargement.
+        Déployable sur Cloudflare Pages.
+      </p>
+    </div>
+  </section>
+</main>
+
+<button class="fab" id="fabBtn" onclick="openAddForCurrentTab()" title="Ajouter">+</button>
+
+<nav class="tabs">
+  <div class="row">
+    <button data-tab="dashboard" class="active" onclick="switchTab('dashboard')"><span class="ic">📊</span>Dashboard</button>
+    <button data-tab="carburant" onclick="switchTab('carburant')"><span class="ic">⛽</span>Carburant</button>
+    <button data-tab="entretien" onclick="switchTab('entretien')"><span class="ic">🔧</span>Entretien</button>
+    <button data-tab="pneus" onclick="switchTab('pneus')"><span class="ic">🛞</span>Pneus</button>
+    <button data-tab="achats" onclick="switchTab('achats')"><span class="ic">🛍️</span>Achats</button>
+    <button data-tab="reglages" onclick="switchTab('reglages')"><span class="ic">⚙️</span>Réglages</button>
+  </div>
+</nav>
+
+<div id="modalRoot"></div>
+
+<script>
+/* ============= STATE ============= */
+const LS_KEY = 'suivi_voiture_v1';
+const today = () => new Date().toISOString().slice(0,10);
+
+const DEFAULT_MAINT = [
+  { id:'vidange',    name:'Vidange + filtre huile',   intKm:15000, intMonths:12,  icon:'🛢️' },
+  { id:'filtre_air', name:'Filtre à air',             intKm:40000, intMonths:24,  icon:'💨' },
+  { id:'filtre_carb',name:'Filtre à carburant',       intKm:40000, intMonths:24,  icon:'⛽' },
+  { id:'filtre_hab', name:"Filtre d'habitacle",       intKm:20000, intMonths:12,  icon:'🌬️' },
+  { id:'liq_frein',  name:'Liquide de frein',         intKm:60000, intMonths:24,  icon:'🛑' },
+  { id:'liq_refr',   name:'Liquide refroidissement',  intKm:90000, intMonths:48,  icon:'🧊' },
+  { id:'distribution',name:'Courroie distribution',   intKm:120000,intMonths:72,  icon:'⚙️' },
+  { id:'plaq_av',    name:'Plaquettes avant',         intKm:50000, intMonths:null,icon:'🧱' },
+  { id:'plaq_ar',    name:'Plaquettes arrière',       intKm:70000, intMonths:null,icon:'🧱' },
+  { id:'ct',         name:'Contrôle technique',       intKm:null,  intMonths:24,  icon:'📋' },
+];
+
+function freshState(){
+  return {
+    vehicle:{ name:'Nouvelle voiture', plate:'', buyDate:today(), startKm:0, ctDate:'', tank:55 },
+    fillups:[],          // {id,date,km,liters,pricePerLiter,total,fullTank,notes}
+    maintenance:[],      // {id,date,km,type,price,notes}
+    tires:[],            // {id,date,brand,season,unitPrice,mountingPrice,qty,total,km}
+    purchases:[],        // {id,date,type,price,km,notes}
+    maintConfig: DEFAULT_MAINT.map(m=>({...m}))
+  };
+}
+
+let state = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return freshState();
+    const s = JSON.parse(raw);
+    // ensure maintConfig present (forward compat)
+    if(!s.maintConfig) s.maintConfig = DEFAULT_MAINT.map(m=>({...m}));
+    return s;
+  }catch(e){ return freshState() }
+}
+
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)) }
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7) }
+
+function fmt(n,d=2){ if(n===null||n===undefined||isNaN(n)) return '—'; return Number(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d}) }
+function fmtInt(n){ if(n===null||n===undefined||isNaN(n)) return '—'; return Math.round(n).toLocaleString('fr-FR') }
+function eur(n){ return fmt(n,2)+' €' }
+function fmtDate(d){ if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}) }
+function fmtDateFull(d){ if(!d) return ''; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}) }
+function monthLabel(d){ const dt=new Date(d); return dt.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'}) }
+function monthKey(d){ const dt=new Date(d); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0') }
+
+/* ============= COMPUTED ============= */
+function currentKm(){
+  let km = state.vehicle.startKm || 0;
+  const all = [
+    ...state.fillups.map(x=>x.km),
+    ...state.maintenance.map(x=>x.km),
+    ...state.tires.map(x=>x.km),
+    ...state.purchases.map(x=>x.km),
+  ].filter(x=>typeof x==='number' && !isNaN(x));
+  if(all.length) km = Math.max(km, ...all);
+  return km;
+}
+
+function totalDistance(){ return Math.max(0, currentKm() - (state.vehicle.startKm||0)) }
+
+function sortedFillups(){
+  return [...state.fillups].sort((a,b)=>(a.km||0)-(b.km||0) || a.date.localeCompare(b.date));
+}
+
+function consumptionPerFillup(){
+  // L/100km between consecutive FULL fillups (collapse partial fills into the next full)
+  const sorted = sortedFillups();
+  const out = [];
+  let segLiters = 0, segStartKm = null;
+  for(let i=0;i<sorted.length;i++){
+    const f = sorted[i];
+    if(segStartKm===null){
+      segStartKm = f.km;
+      segLiters = 0;
+      // first fillup is the reference, skip until next full
+      continue;
+    }
+    segLiters += Number(f.liters||0);
+    if(f.fullTank){
+      const dist = f.km - segStartKm;
+      if(dist>0 && segLiters>0){
+        out.push({date:f.date,km:f.km,cons:(segLiters/dist)*100,dist:dist,liters:segLiters});
+      }
+      segStartKm = f.km;
+      segLiters = 0;
+    }
+  }
+  return out;
+}
+
+function avgConsumption(){
+  const arr = consumptionPerFillup();
+  if(!arr.length) return null;
+  const totLiters = arr.reduce((s,x)=>s+x.liters,0);
+  const totDist = arr.reduce((s,x)=>s+x.dist,0);
+  return totDist>0 ? (totLiters/totDist)*100 : null;
+}
+
+function totalFuelCost(){ return state.fillups.reduce((s,x)=>s+Number(x.total||0),0) }
+function totalMaintCost(){ return state.maintenance.reduce((s,x)=>s+Number(x.price||0),0) }
+function totalTireCost(){ return state.tires.reduce((s,x)=>s+Number(x.total||0),0) }
+function totalPurchaseCost(){ return state.purchases.reduce((s,x)=>s+Number(x.price||0),0) }
+function totalSpent(){ return totalFuelCost()+totalMaintCost()+totalTireCost()+totalPurchaseCost() }
+function costPerKm(){ const d=totalDistance(); return d>0 ? totalFuelCost()/d : null }
+
+/* ============= UI HELPERS ============= */
+function el(id){ return document.getElementById(id) }
+function html(s){ const t=document.createElement('template'); t.innerHTML=s.trim(); return t.content.firstElementChild }
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className='toast'; t.innerHTML='<span>✓</span><span>'+msg+'</span>';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),1800);
+}
+
+function switchTab(name){
+  document.querySelectorAll('main > section').forEach(s=>s.classList.add('hide'));
+  el('tab-'+name).classList.remove('hide');
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  el('fabBtn').style.display = (name==='dashboard'||name==='reglages') ? 'none' : 'flex';
+  window.scrollTo({top:0,behavior:'instant'});
+  if(name==='dashboard') renderDashboard();
+  if(name==='entretien') renderMaintAlerts();
+}
+
+function openAddForCurrentTab(){
+  const active = document.querySelector('nav.tabs button.active').dataset.tab;
+  if(active==='carburant') openFillupForm();
+  else if(active==='entretien') openMaintForm();
+  else if(active==='pneus') openTireForm();
+  else if(active==='achats') openPurchaseForm();
+}
+
+function showModal(innerHTML){
+  const root = el('modalRoot');
+  root.innerHTML = '<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modal-content">'+innerHTML+'</div></div>';
+  document.body.style.overflow='hidden';
+}
+function closeModal(){ el('modalRoot').innerHTML=''; document.body.style.overflow='' }
+
+/* ============= FORMS ============= */
+
+function openFillupForm(existing){
+  const f = existing || { date:today(), km:currentKm()||'', liters:'', pricePerLiter:'', total:'', fullTank:true, notes:'' };
+  showModal(`
+    <h3>${existing?'Modifier':'Nouveau'} plein ⛽ <button class="close" onclick="closeModal()">×</button></h3>
+    <div class="grid cols2">
+      <div><label>Date</label><input id="ffDate" type="date" value="${f.date||today()}"/></div>
+      <div><label>Kilométrage</label><input id="ffKm" type="number" inputmode="numeric" value="${f.km}" placeholder="ex: 12345"/></div>
+      <div><label>Litres</label><input id="ffLit" type="number" step="0.01" inputmode="decimal" value="${f.liters}"/></div>
+      <div><label>€/L</label><input id="ffPpl" type="number" step="0.001" inputmode="decimal" value="${f.pricePerLiter}"/></div>
+      <div><label>Coût total (€)</label><input id="ffTot" type="number" step="0.01" inputmode="decimal" value="${f.total}"/></div>
+      <div>
+        <label>Type de plein</label>
+        <div class="seg" id="ffFull">
+          <button type="button" data-v="1" class="${f.fullTank?'active':''}">Plein complet</button>
+          <button type="button" data-v="0" class="${!f.fullTank?'active':''}">Partiel</button>
+        </div>
+      </div>
+      <div style="grid-column:1/-1"><label>Notes</label><input id="ffNotes" value="${f.notes||''}" placeholder="Station, autoroute, etc."/></div>
+    </div>
+    <p class="hint">Conso calculée entre 2 « pleins complets ». Pour un partiel (jerrycan, appoint), la conso n'est pas calculée tout de suite.</p>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="saveFillup('${existing?existing.id:''}')">💾 Enregistrer</button>
+      ${existing?`<button class="btn danger" onclick="deleteFillup('${existing.id}')">🗑️ Supprimer</button>`:''}
+    </div>
+  `);
+  // Auto-calc bindings
+  const ffLit=el('ffLit'), ffPpl=el('ffPpl'), ffTot=el('ffTot');
+  function recalcTotal(){ if(ffLit.value && ffPpl.value){ ffTot.value=(parseFloat(ffLit.value)*parseFloat(ffPpl.value)).toFixed(2) } }
+  function recalcPpl(){ if(ffLit.value && ffTot.value){ ffPpl.value=(parseFloat(ffTot.value)/parseFloat(ffLit.value)).toFixed(3) } }
+  ffLit.addEventListener('input',recalcTotal);
+  ffPpl.addEventListener('input',recalcTotal);
+  ffTot.addEventListener('input',recalcPpl);
+  el('ffFull').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    el('ffFull').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+  }));
+}
+function saveFillup(id){
+  const d = {
+    id: id || uid(),
+    date: el('ffDate').value || today(),
+    km: parseFloat(el('ffKm').value)||0,
+    liters: parseFloat(el('ffLit').value)||0,
+    pricePerLiter: parseFloat(el('ffPpl').value)||0,
+    total: parseFloat(el('ffTot').value)||0,
+    fullTank: el('ffFull').querySelector('button.active').dataset.v==='1',
+    notes: el('ffNotes').value.trim()
+  };
+  if(!d.km || !d.liters){ alert('Renseigne au moins le kilométrage et les litres'); return }
+  if(d.pricePerLiter && !d.total) d.total = +(d.liters*d.pricePerLiter).toFixed(2);
+  if(id){
+    state.fillups = state.fillups.map(x=>x.id===id?d:x);
+  }else{
+    state.fillups.push(d);
+  }
+  save(); renderAll(); closeModal(); toast(id?'Plein modifié':'Plein ajouté');
+}
+function deleteFillup(id){
+  if(!confirm('Supprimer ce plein ?')) return;
+  state.fillups = state.fillups.filter(x=>x.id!==id);
+  save(); renderAll(); closeModal(); toast('Supprimé');
+}
+
+function openMaintForm(existing){
+  const types = state.maintConfig.map(m=>m.name);
+  const m = existing || { date:today(), km:currentKm()||'', type:types[0]||'', price:'', notes:'' };
+  showModal(`
+    <h3>${existing?'Modifier':'Nouvel'} entretien 🔧 <button class="close" onclick="closeModal()">×</button></h3>
+    <div class="grid cols2">
+      <div><label>Date</label><input id="mfDate" type="date" value="${m.date||today()}"/></div>
+      <div><label>Kilométrage</label><input id="mfKm" type="number" inputmode="numeric" value="${m.km}"/></div>
+      <div style="grid-column:1/-1">
+        <label>Type</label>
+        <input id="mfType" list="mfTypeList" value="${m.type||''}" placeholder="Vidange, plaquettes, etc."/>
+        <datalist id="mfTypeList">${types.map(t=>`<option value="${t}">`).join('')}</datalist>
+      </div>
+      <div><label>Prix (€)</label><input id="mfPrice" type="number" step="0.01" inputmode="decimal" value="${m.price}"/></div>
+      <div><label>Notes</label><input id="mfNotes" value="${m.notes||''}" placeholder="Garage, pièces..."/></div>
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="saveMaint('${existing?existing.id:''}')">💾 Enregistrer</button>
+      ${existing?`<button class="btn danger" onclick="deleteMaint('${existing.id}')">🗑️ Supprimer</button>`:''}
+    </div>
+  `);
+}
+function saveMaint(id){
+  const d = {
+    id: id || uid(),
+    date: el('mfDate').value || today(),
+    km: parseFloat(el('mfKm').value)||0,
+    type: el('mfType').value.trim(),
+    price: parseFloat(el('mfPrice').value)||0,
+    notes: el('mfNotes').value.trim()
+  };
+  if(!d.type){ alert('Type requis'); return }
+  if(id){ state.maintenance = state.maintenance.map(x=>x.id===id?d:x) }
+  else { state.maintenance.push(d) }
+  save(); renderAll(); closeModal(); toast(id?'Modifié':'Entretien ajouté');
+}
+function deleteMaint(id){
+  if(!confirm('Supprimer cet entretien ?')) return;
+  state.maintenance = state.maintenance.filter(x=>x.id!==id);
+  save(); renderAll(); closeModal(); toast('Supprimé');
+}
+
+function openTireForm(existing){
+  const t = existing || { date:today(), brand:'', season:'Eté', unitPrice:'', mountingPrice:'', qty:4, total:'', km:currentKm()||'' };
+  showModal(`
+    <h3>${existing?'Modifier':'Nouveau jeu de'} pneus 🛞 <button class="close" onclick="closeModal()">×</button></h3>
+    <div class="grid cols2">
+      <div><label>Date</label><input id="tfDate" type="date" value="${t.date||today()}"/></div>
+      <div><label>Kilométrage</label><input id="tfKm" type="number" inputmode="numeric" value="${t.km}"/></div>
+      <div style="grid-column:1/-1"><label>Marque / modèle</label><input id="tfBrand" value="${t.brand}" placeholder="Michelin CrossClimate..."/></div>
+      <div>
+        <label>Saison</label>
+        <div class="seg" id="tfSeason">
+          <button type="button" data-v="Eté" class="${t.season==='Eté'?'active':''}">Été</button>
+          <button type="button" data-v="Hiver" class="${t.season==='Hiver'?'active':''}">Hiver</button>
+          <button type="button" data-v="4 saisons" class="${t.season==='4 saisons'?'active':''}">4 saisons</button>
+        </div>
+      </div>
+      <div><label>Quantité</label><input id="tfQty" type="number" inputmode="numeric" value="${t.qty}"/></div>
+      <div><label>Prix unitaire (€)</label><input id="tfPu" type="number" step="0.01" inputmode="decimal" value="${t.unitPrice}"/></div>
+      <div><label>Montage / pneu (€)</label><input id="tfMnt" type="number" step="0.01" inputmode="decimal" value="${t.mountingPrice}"/></div>
+      <div style="grid-column:1/-1"><label>Total (€) — auto si vide</label><input id="tfTot" type="number" step="0.01" inputmode="decimal" value="${t.total}"/></div>
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="saveTire('${existing?existing.id:''}')">💾 Enregistrer</button>
+      ${existing?`<button class="btn danger" onclick="deleteTire('${existing.id}')">🗑️ Supprimer</button>`:''}
+    </div>
+  `);
+  el('tfSeason').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    el('tfSeason').querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  }));
+}
+function saveTire(id){
+  const qty = parseFloat(el('tfQty').value)||0;
+  const pu  = parseFloat(el('tfPu').value)||0;
+  const mnt = parseFloat(el('tfMnt').value)||0;
+  let total = parseFloat(el('tfTot').value)||0;
+  if(!total) total = (pu+mnt)*qty;
+  const d = {
+    id: id || uid(),
+    date: el('tfDate').value || today(),
+    km: parseFloat(el('tfKm').value)||0,
+    brand: el('tfBrand').value.trim(),
+    season: el('tfSeason').querySelector('button.active').dataset.v,
+    qty, unitPrice:pu, mountingPrice:mnt, total
+  };
+  if(id){ state.tires = state.tires.map(x=>x.id===id?d:x) }
+  else { state.tires.push(d) }
+  save(); renderAll(); closeModal(); toast(id?'Modifié':'Pneus ajoutés');
+}
+function deleteTire(id){
+  if(!confirm('Supprimer ce jeu de pneus ?')) return;
+  state.tires = state.tires.filter(x=>x.id!==id);
+  save(); renderAll(); closeModal(); toast('Supprimé');
+}
+
+function openPurchaseForm(existing){
+  const p = existing || { date:today(), type:'', price:'', km:currentKm()||'', notes:'' };
+  showModal(`
+    <h3>${existing?'Modifier':'Nouvel'} achat 🛍️ <button class="close" onclick="closeModal()">×</button></h3>
+    <div class="grid cols2">
+      <div><label>Date</label><input id="pfDate" type="date" value="${p.date||today()}"/></div>
+      <div><label>Kilométrage</label><input id="pfKm" type="number" inputmode="numeric" value="${p.km}"/></div>
+      <div style="grid-column:1/-1"><label>Désignation</label><input id="pfType" value="${p.type||''}" placeholder="Lave-glace, ampoules, tapis..."/></div>
+      <div><label>Prix (€)</label><input id="pfPrice" type="number" step="0.01" inputmode="decimal" value="${p.price}"/></div>
+      <div><label>Notes</label><input id="pfNotes" value="${p.notes||''}"/></div>
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="savePurchase('${existing?existing.id:''}')">💾 Enregistrer</button>
+      ${existing?`<button class="btn danger" onclick="deletePurchase('${existing.id}')">🗑️ Supprimer</button>`:''}
+    </div>
+  `);
+}
+function savePurchase(id){
+  const d = {
+    id: id || uid(),
+    date: el('pfDate').value || today(),
+    km: parseFloat(el('pfKm').value)||0,
+    type: el('pfType').value.trim(),
+    price: parseFloat(el('pfPrice').value)||0,
+    notes: el('pfNotes').value.trim()
+  };
+  if(!d.type){ alert('Désignation requise'); return }
+  if(id){ state.purchases = state.purchases.map(x=>x.id===id?d:x) }
+  else { state.purchases.push(d) }
+  save(); renderAll(); closeModal(); toast(id?'Modifié':'Achat ajouté');
+}
+function deletePurchase(id){
+  if(!confirm('Supprimer cet achat ?')) return;
+  state.purchases = state.purchases.filter(x=>x.id!==id);
+  save(); renderAll(); closeModal(); toast('Supprimé');
+}
+
+/* MAINTENANCE SETTINGS */
+function openMaintSettings(){
+  const rows = state.maintConfig.map((m,i)=>`
+    <tr>
+      <td>${m.icon||'🔧'} ${m.name}</td>
+      <td><input data-i="${i}" data-k="intKm" type="number" inputmode="numeric" value="${m.intKm||''}" placeholder="—" style="max-width:90px"/></td>
+      <td><input data-i="${i}" data-k="intMonths" type="number" inputmode="numeric" value="${m.intMonths||''}" placeholder="—" style="max-width:70px"/></td>
+    </tr>
+  `).join('');
+  showModal(`
+    <h3>Intervalles d'entretien ⚙️ <button class="close" onclick="closeModal()">×</button></h3>
+    <table class="simple">
+      <thead><tr><th>Type</th><th>Km</th><th>Mois</th></tr></thead>
+      <tbody id="msBody">${rows}</tbody>
+    </table>
+    <p class="hint">Laisse vide si non applicable. L'alerte se déclenche à 80% de l'intervalle (warning) et à 100% (dépassé).</p>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" onclick="saveMaintSettings()">💾 Enregistrer</button>
+      <button class="btn ghost" onclick="resetMaintSettings()">Valeurs par défaut</button>
+    </div>
+  `);
+}
+function saveMaintSettings(){
+  el('msBody').querySelectorAll('input').forEach(inp=>{
+    const i = +inp.dataset.i, k = inp.dataset.k;
+    const v = inp.value ? parseFloat(inp.value) : null;
+    state.maintConfig[i][k] = v;
+  });
+  save(); closeModal(); renderAll(); toast('Intervalles enregistrés');
+}
+function resetMaintSettings(){
+  if(!confirm('Restaurer les valeurs par défaut ?')) return;
+  state.maintConfig = DEFAULT_MAINT.map(m=>({...m}));
+  save(); openMaintSettings();
+}
+
+/* ============= RENDER LISTS ============= */
+function renderFuelList(){
+  const wrap = el('fuelList');
+  if(!state.fillups.length){
+    wrap.innerHTML = `<div class="empty"><div class="ic">⛽</div><div class="ttl">Aucun plein</div><div>Touche + pour en ajouter un</div></div>`;
+    el('cFuelCount').textContent = '0';
+    return;
+  }
+  // attach computed conso back to each fillup for display
+  const arr = [...state.fillups].sort((a,b)=>b.date.localeCompare(a.date) || (b.km||0)-(a.km||0));
+  const sortedAsc = sortedFillups();
+  const consMap = {};
+  // compute distance and conso row-by-row
+  for(let i=1;i<sortedAsc.length;i++){
+    const cur=sortedAsc[i], prev=sortedAsc[i-1];
+    const dist = cur.km - prev.km;
+    consMap[cur.id] = { dist, conso: (cur.fullTank && dist>0) ? (cur.liters/dist)*100 : null };
+  }
+  wrap.innerHTML = arr.map(f=>{
+    const meta = consMap[f.id];
+    const tag = f.fullTank ? `<span class="tag full">PLEIN</span>` : `<span class="tag part">APPOINT</span>`;
+    return `<div class="row-item" onclick='openFillupForm(${JSON.stringify(f).replace(/'/g,"&#39;")})'>
+      <div class="dt">${fmtDate(f.date)}<br/><span class="muted">${fmtInt(f.km)} km</span></div>
+      <div>
+        <div class="ttl">${fmt(f.liters,2)} L à ${fmt(f.pricePerLiter,3)} €/L ${tag}</div>
+        <div class="meta">${meta&&meta.dist?fmtInt(meta.dist)+' km':''}${meta&&meta.conso?' · '+fmt(meta.conso,2)+' L/100':''}${f.notes?' · '+f.notes:''}</div>
+      </div>
+      <div class="amt">${eur(f.total)}</div>
+    </div>`;
+  }).join('');
+  el('cFuelCount').textContent = state.fillups.length;
+}
+
+function renderMaintList(){
+  const wrap = el('maintList');
+  if(!state.maintenance.length){
+    wrap.innerHTML = `<div class="empty"><div class="ic">🔧</div><div class="ttl">Aucun entretien</div><div>Touche + pour en ajouter un</div></div>`;
+    el('cMaintCount').textContent='0';
+    return;
+  }
+  const arr = [...state.maintenance].sort((a,b)=>b.date.localeCompare(a.date));
+  wrap.innerHTML = arr.map(m=>`
+    <div class="row-item" onclick='openMaintForm(${JSON.stringify(m).replace(/'/g,"&#39;")})'>
+      <div class="dt">${fmtDate(m.date)}<br/><span class="muted">${fmtInt(m.km)} km</span></div>
+      <div>
+        <div class="ttl">${m.type}</div>
+        <div class="meta">${m.notes||''}</div>
+      </div>
+      <div class="amt">${eur(m.price)}</div>
+    </div>`).join('');
+  el('cMaintCount').textContent=state.maintenance.length;
+}
+
+function renderTireList(){
+  const wrap = el('tireList');
+  if(!state.tires.length){
+    wrap.innerHTML = `<div class="empty"><div class="ic">🛞</div><div class="ttl">Aucun pneu enregistré</div><div>Touche + pour ajouter un jeu</div></div>`;
+    el('cTireCount').textContent='0'; return;
+  }
+  const arr = [...state.tires].sort((a,b)=>b.date.localeCompare(a.date));
+  wrap.innerHTML = arr.map(t=>{
+    const seasonTag = t.season==='Eté'?'<span class="tag season-ete">ÉTÉ</span>':t.season==='Hiver'?'<span class="tag season-hiver">HIVER</span>':`<span class="tag">${t.season||''}</span>`;
+    return `<div class="row-item" onclick='openTireForm(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
+      <div class="dt">${fmtDate(t.date)}<br/><span class="muted">${fmtInt(t.km)} km</span></div>
+      <div>
+        <div class="ttl">${t.brand||'(sans marque)'} ${seasonTag}</div>
+        <div class="meta">x${t.qty||0} · ${fmt(t.unitPrice,2)}€ + ${fmt(t.mountingPrice,2)}€ montage</div>
+      </div>
+      <div class="amt">${eur(t.total)}</div>
+    </div>`;
+  }).join('');
+  el('cTireCount').textContent=state.tires.length;
+}
+
+function renderBuyList(){
+  const wrap = el('buyList');
+  if(!state.purchases.length){
+    wrap.innerHTML = `<div class="empty"><div class="ic">🛍️</div><div class="ttl">Aucun achat</div><div>Touche + pour en ajouter un</div></div>`;
+    el('cBuyCount').textContent='0'; return;
+  }
+  const arr = [...state.purchases].sort((a,b)=>b.date.localeCompare(a.date));
+  wrap.innerHTML = arr.map(p=>`
+    <div class="row-item" onclick='openPurchaseForm(${JSON.stringify(p).replace(/'/g,"&#39;")})'>
+      <div class="dt">${fmtDate(p.date)}<br/><span class="muted">${fmtInt(p.km)} km</span></div>
+      <div>
+        <div class="ttl">${p.type}</div>
+        <div class="meta">${p.notes||''}</div>
+      </div>
+      <div class="amt">${eur(p.price)}</div>
+    </div>`).join('');
+  el('cBuyCount').textContent=state.purchases.length;
+}
+
+/* ============= ALERTS ============= */
+function maintStatus(){
+  const km = currentKm();
+  const now = new Date();
+  return state.maintConfig.map(cfg=>{
+    // last occurrence in history (match by name, case-insensitive substring of cfg.name or exact)
+    const last = state.maintenance
+      .filter(m=>m.type && cfg.name.toLowerCase().split(' ').slice(0,2).join(' ').includes(m.type.toLowerCase().split(' ').slice(0,2).join(' ')) || m.type.toLowerCase()===cfg.name.toLowerCase() || m.type.toLowerCase().includes(cfg.id.replace('_',' ')))
+      .sort((a,b)=>b.date.localeCompare(a.date))[0]
+      || state.maintenance.filter(m=>m.type && m.type.toLowerCase()===cfg.name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    // Fallback for CT
+    let lastDate = last?last.date:(cfg.id==='ct'?state.vehicle.ctDate:'');
+    let lastKm = last?last.km:state.vehicle.startKm;
+    // Compute remaining
+    let remKm = null, remMonths = null;
+    if(cfg.intKm){ remKm = (lastKm + cfg.intKm) - km }
+    if(cfg.intMonths && lastDate){
+      const d = new Date(lastDate); d.setMonth(d.getMonth()+cfg.intMonths);
+      remMonths = Math.round((d-now)/(1000*60*60*24*30.44));
+    }
+    // status
+    let sev='ok', pct=0;
+    if(cfg.intKm){
+      const used = km - lastKm;
+      pct = Math.max(pct, Math.min(100, (used/cfg.intKm)*100));
+    }
+    if(cfg.intMonths && lastDate){
+      const used = (now - new Date(lastDate))/(1000*60*60*24*30.44);
+      pct = Math.max(pct, Math.min(100, (used/cfg.intMonths)*100));
+    }
+    if(pct>=100) sev='bad';
+    else if(pct>=80) sev='warn';
+    return { cfg, last, lastDate, lastKm, remKm, remMonths, sev, pct };
+  });
+}
+
+function renderMaintAlerts(){
+  const wrap = el('maintAlerts');
+  const items = maintStatus();
+  wrap.innerHTML = items.map(it=>{
+    const c = it.cfg;
+    let parts = [];
+    if(c.intKm){
+      const txt = it.remKm===null?'':(it.remKm>0?`reste ${fmtInt(it.remKm)} km`:`dépassé de ${fmtInt(-it.remKm)} km`);
+      parts.push(`tous les ${fmtInt(c.intKm)} km — ${txt}`);
+    }
+    if(c.intMonths){
+      const txt = it.remMonths===null?'':(it.remMonths>0?`reste ${it.remMonths} mois`:`dépassé de ${-it.remMonths} mois`);
+      parts.push(`tous les ${c.intMonths} mois — ${txt}`);
+    }
+    const lastTxt = it.last ? `Dernier : ${fmtDateFull(it.last.date)} @ ${fmtInt(it.last.km)} km` : (it.lastDate?`Référence : ${fmtDateFull(it.lastDate)}`:'Jamais fait');
+    const statTxt = it.sev==='bad'?'⚠️ À FAIRE':it.sev==='warn'?'🟡 Bientôt':'✅ OK';
+    return `<div class="maint-item ${it.sev}">
+      <div>
+        <div class="nm">${c.icon||'🔧'} ${c.name}</div>
+        <div class="info">${parts.join(' · ')}</div>
+        <div class="info">${lastTxt}</div>
+      </div>
+      <div class="stat">${statTxt}</div>
+      <div class="bar"><span style="width:${Math.round(it.pct)}%"></span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderTopAlerts(){
+  const wrap = el('alertsBox');
+  const items = maintStatus().filter(i=>i.sev!=='ok').sort((a,b)=>b.pct-a.pct).slice(0,3);
+  if(!items.length){ wrap.innerHTML=''; return }
+  wrap.innerHTML = `<div class="card" style="padding:12px"><div class="list">` +
+    items.map(it=>{
+      const c = it.cfg;
+      const txt = it.sev==='bad' ? `${c.name} — à faire` : `${c.name} — bientôt`;
+      const det = c.intKm && it.remKm!==null ? (it.remKm>0?`encore ${fmtInt(it.remKm)} km`:`dépassé de ${fmtInt(-it.remKm)} km`) :
+                  c.intMonths && it.remMonths!==null ? (it.remMonths>0?`encore ${it.remMonths} mois`:`dépassé de ${-it.remMonths} mois`) : '';
+      return `<div class="alert ${it.sev}"><span class="ic">${it.sev==='bad'?'⚠️':'🟡'}</span><div><b>${txt}</b><div style="font-size:11px;opacity:.85">${det}</div></div></div>`;
+    }).join('') + `</div></div>`;
+}
+
+/* ============= CHARTS ============= */
+let _charts = {};
+function destroyCharts(){
+  Object.values(_charts).forEach(c=>{ try{c.destroy()}catch(e){} });
+  _charts = {};
+}
+/* Re-create canvas inside its wrapper so we can switch between chart and "empty" state */
+function getCanvas(id, wrapperHeight){
+  // Find the wrapper that originally contained <canvas id=...>
+  let wrap = document.querySelector('[data-cv="'+id+'"]');
+  if(!wrap){
+    const c = el(id);
+    if(c){ wrap = c.parentElement; wrap.setAttribute('data-cv',id) }
+  }
+  if(!wrap) return null;
+  wrap.innerHTML = '<canvas id="'+id+'"></canvas>';
+  return el(id);
+}
+function showChartEmpty(id, msg){
+  let wrap = document.querySelector('[data-cv="'+id+'"]');
+  if(!wrap){ const c = el(id); if(c){ wrap = c.parentElement; wrap.setAttribute('data-cv',id) } }
+  if(!wrap) return;
+  wrap.innerHTML = `<div class="empty" style="padding:20px"><div class="ic">📈</div><div>${msg}</div></div>`;
+}
+
+function renderCharts(){
+  destroyCharts();
+  const cs = consumptionPerFillup();
+  const baseFont = {family:'-apple-system, Inter, Segoe UI, sans-serif', size:11};
+  const gridColor='rgba(255,255,255,.06)', tickColor='#90a0c4';
+
+  // Cons
+  if(cs.length){
+    const cv = getCanvas('chartCons'); if(!cv){ showChartEmpty('chartCons','—') } else
+    _charts.cons = new Chart(cv,{
+      type:'line',
+      data:{ labels: cs.map(x=>fmtDateFull(x.date)),
+        datasets:[{ label:'L/100km', data:cs.map(x=>+x.cons.toFixed(2)),
+          borderColor:'#22d3ee', backgroundColor:'rgba(34,211,238,.15)',
+          tension:.3, fill:true, pointRadius:3, pointHoverRadius:5 }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+' L/100km'}} },
+        scales:{ x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},
+                 y:{ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}} } }
+    });
+  } else { showChartEmpty('chartCons','Ajoute au moins 2 pleins complets pour voir la conso') }
+
+  // Price
+  const sorted = sortedFillups().filter(f=>f.pricePerLiter>0);
+  if(sorted.length){
+    const cv = getCanvas('chartPrice'); if(!cv){ showChartEmpty('chartPrice','—') } else
+    _charts.price = new Chart(cv,{
+      type:'line',
+      data:{ labels: sorted.map(x=>fmtDateFull(x.date)),
+        datasets:[{ label:'€/L', data:sorted.map(x=>+x.pricePerLiter.toFixed(3)),
+          borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.15)', tension:.3, fill:true, pointRadius:2 }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{ x:{ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:gridColor}},
+                 y:{ticks:{color:tickColor,font:baseFont},grid:{color:gridColor}} } }
+    });
+  } else { showChartEmpty('chartPrice','Pas encore de prix saisis') }
+
+  // Monthly stacked
+  const months = {};
+  const cat = (m,k,v)=>{ months[m] = months[m]||{Carburant:0,Entretien:0,Pneus:0,Achats:0}; months[m][k]+=v };
+  state.fillups.forEach(f=>cat(monthKey(f.date),'Carburant',Number(f.total||0)));
+  state.maintenance.forEach(m=>cat(monthKey(m.date),'Entretien',Number(m.price||0)));
+  state.tires.forEach(t=>cat(monthKey(t.date),'Pneus',Number(t.total||0)));
+  state.purchases.forEach(p=>cat(monthKey(p.date),'Achats',Number(p.price||0)));
+  const keys = Object.keys(months).sort();
+  if(keys.length){
+    const palette = {Carburant:'#3b82f6',Entretien:'#ef4444',Pneus:'#10b981',Achats:'#a855f7'};
+    const cv = getCanvas('chartMonthly'); if(!cv){ showChartEmpty('chartMonthly','—') } else
+    _charts.monthly = new Chart(cv,{
+      type:'bar',
+      data:{ labels:keys.map(k=>monthLabel(k+'-01')),
+        datasets:['Carburant','Entretien','Pneus','Achats'].map(c=>({
+          label:c, data:keys.map(k=>+(months[k][c]).toFixed(2)),
+          backgroundColor:palette[c], borderWidth:0, borderRadius:4
+        }))
+      },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'bottom',labels:{color:tickColor,font:baseFont,boxWidth:12,padding:10}},
+                  tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' €'}} },
+        scales:{ x:{stacked:true,ticks:{color:tickColor,font:baseFont,maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}},
+                 y:{stacked:true,ticks:{color:tickColor,font:baseFont,callback:v=>v+'€'},grid:{color:gridColor}} } }
+    });
+  } else { showChartEmpty('chartMonthly','Pas encore de dépenses') }
+
+  // Pie
+  const pieData = [
+    {l:'Carburant',v:totalFuelCost(),c:'#3b82f6'},
+    {l:'Entretien',v:totalMaintCost(),c:'#ef4444'},
+    {l:'Pneus',v:totalTireCost(),c:'#10b981'},
+    {l:'Achats',v:totalPurchaseCost(),c:'#a855f7'},
+  ].filter(x=>x.v>0);
+  if(pieData.length){
+    const cv = getCanvas('chartPie'); if(!cv){ showChartEmpty('chartPie','—') } else
+    _charts.pie = new Chart(cv,{
+      type:'doughnut',
+      data:{ labels:pieData.map(x=>x.l), datasets:[{ data:pieData.map(x=>+x.v.toFixed(2)), backgroundColor:pieData.map(x=>x.c), borderColor:'#111a2e', borderWidth:2 }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+        plugins:{ legend:{position:'bottom',labels:{color:tickColor,font:baseFont,boxWidth:12,padding:10}},
+                  tooltip:{callbacks:{label:c=>c.label+': '+c.parsed.toFixed(2)+' € ('+((c.parsed/totalSpent())*100).toFixed(1)+'%)'}} } }
+    });
+  } else { showChartEmpty('chartPie','Pas encore de dépenses') }
+}
+
+/* ============= SETTINGS ============= */
+function loadSettingsToForm(){
+  const v = state.vehicle;
+  el('setName').value = v.name||'';
+  el('setPlate').value = v.plate||'';
+  el('setBuyDate').value = v.buyDate||'';
+  el('setStartKm').value = v.startKm||0;
+  el('setCtDate').value = v.ctDate||'';
+  el('setTank').value = v.tank||'';
+}
+function saveSettings(){
+  state.vehicle = {
+    name: el('setName').value.trim() || 'Ma voiture',
+    plate: el('setPlate').value.trim(),
+    buyDate: el('setBuyDate').value,
+    startKm: parseFloat(el('setStartKm').value)||0,
+    ctDate: el('setCtDate').value,
+    tank: parseFloat(el('setTank').value)||0
+  };
+  save(); renderAll(); toast('Enregistré');
+}
+
+/* ============= EXPORT / IMPORT ============= */
+function exportXLSX(){
+  const wb = XLSX.utils.book_new();
+
+  // Carburant
+  const fuel = [['Date','Kilométrage','Distance','€/L','Litres','Coût','Conso L/100','Type','Notes']];
+  const sortedAsc = sortedFillups();
+  for(let i=0;i<sortedAsc.length;i++){
+    const f = sortedAsc[i];
+    const prev = i>0 ? sortedAsc[i-1] : null;
+    const dist = prev ? (f.km - prev.km) : '';
+    const conso = (prev && f.fullTank && dist>0) ? +((f.liters/dist)*100).toFixed(2) : '';
+    fuel.push([f.date, f.km, dist, f.pricePerLiter, f.liters, +Number(f.total).toFixed(2), conso, f.fullTank?'PLEIN':'APPOINT', f.notes||'']);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fuel), 'Carburant');
+
+  // Entretiens
+  const m = [['Date','Type','Prix','Kilométrage','Notes']];
+  [...state.maintenance].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>m.push([x.date,x.type,x.price,x.km,x.notes||'']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(m), 'Entretiens');
+
+  // Pneus
+  const t = [['Date','Marque','Saison','PU','PU montage','Qté','Total','Kilométrage']];
+  [...state.tires].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>t.push([x.date,x.brand,x.season,x.unitPrice,x.mountingPrice,x.qty,x.total,x.km]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t), 'Pneus');
+
+  // Achats
+  const a = [['Date','Type','Prix','Kilométrage','Notes']];
+  [...state.purchases].sort((x,y)=>x.date.localeCompare(y.date)).forEach(x=>a.push([x.date,x.type,x.price,x.km,x.notes||'']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Achats');
+
+  // Récap
+  const recap = [
+    ['Véhicule', state.vehicle.name||''],
+    ['Plaque', state.vehicle.plate||''],
+    ['Date achat', state.vehicle.buyDate||''],
+    ['Km à l\'achat', state.vehicle.startKm||0],
+    ['Km actuel', currentKm()],
+    ['Distance totale', totalDistance()],
+    ['Conso moyenne (L/100)', avgConsumption()?+avgConsumption().toFixed(2):''],
+    ['Coût total carburant', +totalFuelCost().toFixed(2)],
+    ['Coût total entretien', +totalMaintCost().toFixed(2)],
+    ['Coût total pneus', +totalTireCost().toFixed(2)],
+    ['Coût total achats', +totalPurchaseCost().toFixed(2)],
+    ['TOTAL', +totalSpent().toFixed(2)],
+    ['Coût / km (carburant)', costPerKm()?+costPerKm().toFixed(3):''],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(recap), 'Récap');
+
+  const fname = (state.vehicle.name||'voiture').replace(/[^\w]+/g,'_')+'_'+today()+'.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Export Excel généré');
+}
+
+function importXLSX(ev){
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
+      if(!confirm('Importer ce fichier va remplacer les données actuelles. Continuer ?')) return;
+      const newState = freshState();
+      // Carburant
+      if(wb.SheetNames.includes('Carburant')){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets['Carburant'],{defval:''});
+        rows.forEach(r=>{
+          if(!r['Kilométrage'] && !r['Km']) return;
+          const km = parseFloat(r['Kilométrage']||r['Km']||0);
+          if(!km) return;
+          const liters = parseFloat(r['Litres']||r['litres']||0);
+          if(!liters) return;
+          const ppl = parseFloat(r['€/L']||r['Prix unitaire']||0);
+          const tot = parseFloat(r['Coût']||r['Total']||(liters*ppl));
+          const type = (r['Type']||r['type']||'').toString().toUpperCase();
+          newState.fillups.push({
+            id:uid(), date:toISO(r['Date']), km, liters,
+            pricePerLiter:ppl, total:tot,
+            fullTank: type ? !(type.includes('APPOINT')||type.includes('PARTIEL')||type.includes('JERRY')) : true,
+            notes:r['Notes']||r['notes']||''
+          });
+        });
+      }
+      // Helper: get value by trimmed key (handle "Date " vs "Date")
+      const getv = (row, ...keys) => {
+        const norm = {};
+        Object.keys(row).forEach(k => { norm[k.trim().toLowerCase()] = row[k] });
+        for(const k of keys){
+          const v = norm[k.trim().toLowerCase()];
+          if(v!==undefined && v!=='') return v;
+        }
+        return '';
+      };
+      // Entretiens
+      if(wb.SheetNames.includes('Entretiens')){
+        XLSX.utils.sheet_to_json(wb.Sheets['Entretiens'],{defval:''}).forEach(r=>{
+          const type = getv(r,'Type');
+          if(!type) return;
+          newState.maintenance.push({id:uid(),date:toISO(getv(r,'Date')),type:type+'',price:parseFloat(getv(r,'Prix')||0),km:parseFloat(getv(r,'Kilométrage','Km')||0),notes:getv(r,'Notes')||''});
+        });
+      }
+      // Pneus
+      if(wb.SheetNames.includes('Pneus')){
+        XLSX.utils.sheet_to_json(wb.Sheets['Pneus'],{defval:''}).forEach(r=>{
+          const brand = getv(r,'Marque','Type');
+          if(!brand) return;
+          const qty=parseFloat(getv(r,'Qté','Quantité')||4);
+          const pu=parseFloat(getv(r,'PU','P.U.')||0);
+          const mnt=parseFloat(getv(r,'PU montage','P.U. montage')||0);
+          const tot = parseFloat(getv(r,'Total','Prix total')|| ((pu+mnt)*qty));
+          newState.tires.push({id:uid(),date:toISO(getv(r,'Date')),brand,season:getv(r,'Saison')||'Eté',unitPrice:pu,mountingPrice:mnt,qty,total:tot,km:parseFloat(getv(r,'Kilométrage','Distance montage')||0)});
+        });
+      }
+      // Achats
+      if(wb.SheetNames.includes('Achats')){
+        XLSX.utils.sheet_to_json(wb.Sheets['Achats'],{defval:''}).forEach(r=>{
+          const type = getv(r,'Type');
+          if(!type) return;
+          newState.purchases.push({id:uid(),date:toISO(getv(r,'Date')),type:type+'',price:parseFloat(getv(r,'Prix')||0),km:parseFloat(getv(r,'Kilométrage','Km')||0),notes:getv(r,'Notes')||''});
+        });
+      }
+      // Auto-set startKm to min km in imported data (for meaningful "distance parcourue")
+      const allKm = [...newState.fillups,...newState.maintenance,...newState.tires,...newState.purchases].map(x=>x.km).filter(x=>x>0);
+      if(allKm.length){
+        newState.vehicle.startKm = Math.min(...allKm);
+        // pick earliest fillup date as buy date if any
+        const dates = [...newState.fillups,...newState.maintenance].map(x=>x.date).filter(Boolean).sort();
+        if(dates.length) newState.vehicle.buyDate = dates[0];
+      }
+      state = newState; save(); renderAll(); loadSettingsToForm();
+      toast('Import réussi : '+newState.fillups.length+' pleins');
+    }catch(err){ alert('Erreur import : '+err.message) }
+  };
+  reader.readAsArrayBuffer(file);
+  ev.target.value='';
+}
+
+function toISO(d){
+  if(!d) return today();
+  if(d instanceof Date && !isNaN(d)) return d.toISOString().slice(0,10);
+  const s = String(d);
+  // try parse
+  const parsed = new Date(s);
+  if(!isNaN(parsed)) return parsed.toISOString().slice(0,10);
+  // FR format dd/mm/yyyy
+  const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(m){ const y = m[3].length===2 ? '20'+m[3] : m[3]; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` }
+  return today();
+}
+
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.vehicle.name||'voiture').replace(/[^\w]+/g,'_')+'_backup_'+today()+'.json';
+  a.click();
+  toast('Sauvegarde JSON');
+}
+function importJSON(ev){
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!confirm('Restaurer cette sauvegarde ? Les données actuelles seront remplacées.')) return;
+      state = data; if(!state.maintConfig) state.maintConfig = DEFAULT_MAINT.map(m=>({...m}));
+      save(); renderAll(); loadSettingsToForm(); toast('Restauré');
+    }catch(err){ alert('Fichier invalide') }
+  };
+  reader.readAsText(file);
+  ev.target.value='';
+}
+
+function resetAll(){
+  if(!confirm('⚠️ Tout effacer ? Cette action est irréversible. Pense à exporter d\'abord.')) return;
+  if(!confirm('Vraiment tout effacer ?')) return;
+  state = freshState();
+  save(); renderAll(); loadSettingsToForm(); toast('Réinitialisé');
+}
+
+/* ============= RENDER ALL ============= */
+function renderAll(){
+  // header
+  el('hVehicleName').textContent = state.vehicle.name || 'Ma voiture';
+  el('hVehicleSub').textContent = state.vehicle.plate ? ' · '+state.vehicle.plate : '';
+  el('hKm').textContent = fmtInt(currentKm())+' km';
+
+  // KPIs
+  const ac = avgConsumption();
+  el('kAvgCons').textContent = ac ? fmt(ac,2) : '—';
+  const ck = costPerKm();
+  el('kCostKm').textContent = ck ? fmt(ck,3)+' €' : '—';
+  el('kTotalSpent').textContent = eur(totalSpent());
+  el('kTotalDist').textContent = fmtInt(totalDistance())+' km';
+
+  // Lists
+  renderFuelList(); renderMaintList(); renderTireList(); renderBuyList();
+
+  // Alerts & charts (only if dashboard visible)
+  renderTopAlerts();
+  if(!el('tab-dashboard').classList.contains('hide')) renderCharts();
+  if(!el('tab-entretien').classList.contains('hide')) renderMaintAlerts();
+}
+
+function renderDashboard(){ renderTopAlerts(); renderCharts() }
+
+/* ============= INIT ============= */
+loadSettingsToForm();
+renderAll();
+switchTab('dashboard');
+
+// Re-render charts on resize for responsiveness
+let _resizeTimer;
+window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{ if(!el('tab-dashboard').classList.contains('hide')) renderCharts() },200) });
+</script>
+</body>
+</html>
