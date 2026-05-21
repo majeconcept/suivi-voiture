@@ -510,7 +510,27 @@ function _sanitize(s){
       if(f.totalConverted===undefined) f.totalConverted=Number(f.total||0)*(f.rate||1);
       if(f.adblueLiters===undefined) f.adblueLiters=0;
       if(f.adblueCost===undefined) f.adblueCost=0;
+      if(f.adbluePricePerLiter===undefined) f.adbluePricePerLiter=0;
       if(f.adblueCostConverted===undefined) f.adblueCostConverted=Number(f.adblueCost||0)*(f.rate||1);
+      if(!f.fuel){
+        f.fuel = v.fuel==='diesel'?'Diesel':v.fuel==='e85'?'E85':'SP95';
+      }
+    });
+    // migrate maintenance / tires / purchases
+    v.maintenance.forEach(m=>{
+      if(!m.currency) m.currency=v.currency;
+      if(m.rate===undefined) m.rate=1;
+      if(m.priceConverted===undefined) m.priceConverted=Number(m.price||0)*(m.rate||1);
+    });
+    v.tires.forEach(t=>{
+      if(!t.currency) t.currency=v.currency;
+      if(t.rate===undefined) t.rate=1;
+      if(t.totalConverted===undefined) t.totalConverted=Number(t.total||0)*(t.rate||1);
+    });
+    v.purchases.forEach(p=>{
+      if(!p.currency) p.currency=v.currency;
+      if(p.rate===undefined) p.rate=1;
+      if(p.priceConverted===undefined) p.priceConverted=Number(p.price||0)*(p.rate||1);
     });
   });
   if(!s.activeId || !s.vehicles.find(v=>v.id===s.activeId)) s.activeId = s.vehicles[0].id;
@@ -568,6 +588,56 @@ async function getRate(from, to){
   }
 }
 
+/* Reusable currency segment HTML + binding */
+function currencySegHtml(id, currentCur){
+  const c = currentCur || active().currency || 'CHF';
+  return `<div style="grid-column:1/-1">
+    <label>Devise du paiement</label>
+    <div class="seg" id="${id}">
+      <button type="button" data-v="CHF" class="${c==='CHF'?'active':''}">CHF</button>
+      <button type="button" data-v="EUR" class="${c==='EUR'?'active':''}">€</button>
+    </div>
+    <div class="fxhint" id="${id}Hint"></div>
+  </div>`;
+}
+async function updateGenericFx(segId, priceInputId){
+  const v = active();
+  const seg = el(segId); if(!seg) return;
+  const btn = seg.querySelector('button.active'); if(!btn) return;
+  const cur = btn.dataset.v;
+  const hintEl = el(segId+'Hint');
+  if(!hintEl) return;
+  if(cur === v.currency){ hintEl.innerHTML=''; return }
+  const price = parseFloat(el(priceInputId)?.value)||0;
+  hintEl.innerHTML='💱 …';
+  const r = await getRate(cur, v.currency);
+  hintEl.innerHTML = `💱 1 ${cur} = ${r.rate.toFixed(4)} ${v.currency} (${r.date}${r.source==='fallback'?' · fallback':''}) — converti : <b>${money(price*r.rate, v.currency)}</b>`;
+}
+function bindCurrencySeg(segId, priceInputIds, onChange){
+  const inputs = Array.isArray(priceInputIds)?priceInputIds:[priceInputIds];
+  el(segId).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    el(segId).querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    if(onChange) onChange(b.dataset.v);
+    updateGenericFx(segId, inputs[0]);
+  }));
+  inputs.forEach(id=>{
+    const e = el(id); if(e) e.addEventListener('input',()=>updateGenericFx(segId, inputs[0]));
+  });
+  updateGenericFx(segId, inputs[0]);
+}
+async function getCurrentFx(segId){
+  const v = active();
+  const cur = el(segId).querySelector('button.active').dataset.v;
+  if(cur === v.currency) return {cur, rate:1, date:today(), source:'same'};
+  const r = await getRate(cur, v.currency);
+  return {cur, ...r};
+}
+/* Cost accessors with migration fallback */
+function maintCost(m){ return Number(m.priceConverted!=null?m.priceConverted:m.price)||0 }
+function tireCost(t){ return Number(t.totalConverted!=null?t.totalConverted:t.total)||0 }
+function purchaseCost(p){ return Number(p.priceConverted!=null?p.priceConverted:p.price)||0 }
+
 async function refreshRates(){
   // Force refresh by clearing today's cache for the pair
   Object.keys(localStorage).filter(k=>k.startsWith(FX_LS_PREFIX)).forEach(k=>localStorage.removeItem(k));
@@ -620,9 +690,9 @@ function avgConsumption(){
 }
 function totalFuelCost(){ return active().fillups.reduce((s,x)=>s+Number(x.totalConverted||0),0) }
 function totalAdblueCost(){ return active().fillups.reduce((s,x)=>s+Number(x.adblueCostConverted||0),0) }
-function totalMaintCost(){ return active().maintenance.reduce((s,x)=>s+Number(x.price||0),0) }
-function totalTireCost(){ return active().tires.reduce((s,x)=>s+Number(x.total||0),0) }
-function totalPurchaseCost(){ return active().purchases.reduce((s,x)=>s+Number(x.price||0),0) }
+function totalMaintCost(){ return active().maintenance.reduce((s,x)=>s+maintCost(x),0) }
+function totalTireCost(){ return active().tires.reduce((s,x)=>s+tireCost(x),0) }
+function totalPurchaseCost(){ return active().purchases.reduce((s,x)=>s+purchaseCost(x),0) }
 function totalSpent(){ return totalFuelCost()+totalAdblueCost()+totalMaintCost()+totalTireCost()+totalPurchaseCost() }
 function costPerKm(){ const d=totalDistance(); return d>0 ? totalFuelCost()/d : null }
 function priceConverted(f){
@@ -758,16 +828,38 @@ function renderVehicleListSettings(){
 }
 
 /* ============= FORMS ============= */
+/* Fuel options for fillup form */
+const FUEL_CHOICES = ['SP95','SP98','E85','Diesel'];
+function defaultFuelForVehicle(v){
+  if(v.fuel==='diesel') return 'Diesel';
+  if(v.fuel==='e85') return 'E85';
+  return 'SP95';
+}
+/* Find the previous fillup by km (to show "depuis le dernier plein") */
+function prevFillupBefore(km){
+  const all = sortedFillups().filter(x=>x.km<km);
+  return all.length ? all[all.length-1] : null;
+}
+
 function openFillupForm(existing){
   const v = active();
-  const f = existing || { date:today(), km:currentKm()||'', liters:'', pricePerLiter:'', total:'', fullTank:true, notes:'', currency:v.currency, rate:1, totalConverted:0, adblueLiters:'', adblueCost:'' };
+  const f = existing || { date:today(), km:currentKm()||'', liters:'', pricePerLiter:'', total:'', fullTank:true, notes:'', currency:v.currency, rate:1, totalConverted:0, adblueLiters:'', adblueCost:'', adbluePricePerLiter:'', fuel:defaultFuelForVehicle(v) };
   const showAdblue = (existing && (existing.adblueLiters>0 || existing.adblueCost>0));
   const isDiesel = v.fuel === 'diesel';
+  const currentFuel = f.fuel || defaultFuelForVehicle(v);
   showModal(`
     <h3>${existing?'Modifier':'Nouveau'} plein ⛽ <button class="close" onclick="closeModal()">×</button></h3>
     <div class="grid cols2">
       <div><label>Date</label><input id="ffDate" type="date" value="${f.date||today()}"/></div>
-      <div><label>Kilométrage</label><input id="ffKm" type="number" inputmode="numeric" value="${f.km}" placeholder="ex: 12345"/></div>
+      <div><label>Kilométrage</label><input id="ffKm" type="number" inputmode="numeric" value="${f.km}" placeholder="ex: 12345"/>
+        <div class="fxhint" id="ffKmHint" style="color:#22d3ee"></div>
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Carburant utilisé</label>
+        <div class="seg" id="ffFuel">
+          ${FUEL_CHOICES.map(c=>`<button type="button" data-v="${c}" class="${currentFuel===c?'active':''}">${c}</button>`).join('')}
+        </div>
+      </div>
       <div style="grid-column:1/-1">
         <label>Devise du paiement</label>
         <div class="seg" id="ffCur">
@@ -793,7 +885,8 @@ function openFillupForm(existing){
       <div class="subform-head">💧 AdBlue (en plus du carburant)</div>
       <div class="grid cols2">
         <div><label>Litres AdBlue</label><input id="ffAdL" type="number" step="0.01" inputmode="decimal" value="${f.adblueLiters||''}"/></div>
-        <div><label id="ffAdCLab">Coût AdBlue (${f.currency||v.currency})</label><input id="ffAdC" type="number" step="0.01" inputmode="decimal" value="${f.adblueCost||''}"/></div>
+        <div><label id="ffAdPplLab">${moneySym(f.currency||v.currency)}/L AdBlue</label><input id="ffAdPpl" type="number" step="0.001" inputmode="decimal" value="${f.adbluePricePerLiter||''}"/></div>
+        <div style="grid-column:1/-1"><label id="ffAdCLab">Coût AdBlue (${f.currency||v.currency})</label><input id="ffAdC" type="number" step="0.01" inputmode="decimal" value="${f.adblueCost||''}"/></div>
       </div>
     </div>
     <div style="margin-top:8px">
@@ -806,19 +899,42 @@ function openFillupForm(existing){
     </div>
   `);
   // bindings
-  const L=el('ffLit'), P=el('ffPpl'), T=el('ffTot');
+  const L=el('ffLit'), P=el('ffPpl'), T=el('ffTot'), K=el('ffKm');
   const upd = ()=>{ if(L.value&&P.value) T.value=(parseFloat(L.value)*parseFloat(P.value)).toFixed(2) };
   L.addEventListener('input',upd); P.addEventListener('input',upd);
   T.addEventListener('input',()=>{ if(L.value&&T.value)P.value=(parseFloat(T.value)/parseFloat(L.value)).toFixed(3) });
-  el('ffFull').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    el('ffFull').querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
-  }));
+  // AdBlue auto-calc
+  const AdL=el('ffAdL'), AdP=el('ffAdPpl'), AdC=el('ffAdC');
+  if(AdL && AdP && AdC){
+    const updAd=()=>{ if(AdL.value&&AdP.value) AdC.value=(parseFloat(AdL.value)*parseFloat(AdP.value)).toFixed(2) };
+    AdL.addEventListener('input',updAd); AdP.addEventListener('input',updAd);
+    AdC.addEventListener('input',()=>{ if(AdL.value&&AdC.value)AdP.value=(parseFloat(AdC.value)/parseFloat(AdL.value)).toFixed(3) });
+  }
+  // KM hint: distance since previous fillup
+  const updKmHint = ()=>{
+    const km = parseFloat(K.value)||0;
+    const editingId = existing?existing.id:null;
+    const all = active().fillups.filter(x=>x.id!==editingId && x.km<km).sort((a,b)=>b.km-a.km);
+    const prev = all[0];
+    const h = el('ffKmHint');
+    if(prev && km>prev.km){
+      h.innerHTML = `+ ${fmtInt(km-prev.km)} km depuis le plein du ${fmtDate(prev.date)} (${fmtInt(prev.km)} km)`;
+    } else { h.innerHTML='' }
+  };
+  K.addEventListener('input',updKmHint); updKmHint();
+  // Segments
+  ['ffFull','ffFuel'].forEach(id=>{
+    el(id).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      el(id).querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    }));
+  });
   el('ffCur').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
     el('ffCur').querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
     const c = b.dataset.v;
     el('ffPplLab').textContent = moneySym(c)+'/L';
     el('ffTotLab').textContent = 'Coût total ('+c+')';
     if(el('ffAdCLab')) el('ffAdCLab').textContent = 'Coût AdBlue ('+c+')';
+    if(el('ffAdPplLab')) el('ffAdPplLab').textContent = moneySym(c)+'/L AdBlue';
     updateFxHint();
   }));
   L.addEventListener('input',updateFxHint); P.addEventListener('input',updateFxHint); T.addEventListener('input',updateFxHint);
@@ -844,14 +960,16 @@ function toggleAdblue(){
 async function saveFillup(id){
   const v = active();
   const cur = el('ffCur').querySelector('button.active').dataset.v;
+  const fuel = el('ffFuel').querySelector('button.active').dataset.v;
   const total = parseFloat(el('ffTot').value)||0;
   const liters = parseFloat(el('ffLit').value)||0;
   const ppl = parseFloat(el('ffPpl').value)||0;
   const adL = parseFloat(el('ffAdL')?.value)||0;
-  const adC = parseFloat(el('ffAdC')?.value)||0;
+  const adPpl = parseFloat(el('ffAdPpl')?.value)||0;
+  let adC = parseFloat(el('ffAdC')?.value)||0;
+  if(adL && adPpl && !adC) adC = +(adL*adPpl).toFixed(2);
   let finalTotal = total;
   if(ppl && !total) finalTotal = +(liters*ppl).toFixed(2);
-  // Get rate
   let rate=1, fxDate=today(), source='same';
   if(cur !== v.currency){
     const r = await getRate(cur, v.currency);
@@ -862,11 +980,12 @@ async function saveFillup(id){
     date: el('ffDate').value || today(),
     km: parseFloat(el('ffKm').value)||0,
     liters, pricePerLiter: ppl, total: finalTotal,
+    fuel,
     currency: cur, rate, fxDate, fxSource: source,
     totalConverted: +(finalTotal*rate).toFixed(2),
     fullTank: el('ffFull').querySelector('button.active').dataset.v==='1',
     notes: el('ffNotes').value.trim(),
-    adblueLiters: adL, adblueCost: adC,
+    adblueLiters: adL, adbluePricePerLiter: adPpl, adblueCost: adC,
     adblueCostConverted: +(adC*rate).toFixed(2)
   };
   if(!d.km || !d.liters){ alert('Renseigne au moins le km et les litres'); return }
@@ -882,7 +1001,7 @@ function deleteFillup(id){
 function openMaintForm(existing){
   const v = active();
   const suggestions = suggestionsForVehicle(v);
-  const m = existing || { date:today(), km:currentKm()||'', type:'', price:'', notes:'' };
+  const m = existing || { date:today(), km:currentKm()||'', type:'', price:'', notes:'', currency:v.currency };
   showModal(`
     <h3>${existing?'Modifier':'Nouvel'} entretien 🔧 <button class="close" onclick="closeModal()">×</button></h3>
     <div class="grid cols2">
@@ -892,28 +1011,34 @@ function openMaintForm(existing){
         <label>Type — saisie libre ✍️</label>
         <input id="mfType" list="mfTypeList" value="${escapeHtml(m.type)}" placeholder="Ex: Vidange, traitement diesel, additif, nettoyage injecteurs..." autocomplete="off"/>
         <datalist id="mfTypeList">${suggestions.map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
-        <p class="hint">Tape ce que tu veux. La liste qui s'ouvre donne juste des suggestions (entretien constructeur + traitements courants + tes propres saisies).</p>
+        <p class="hint">Tape ce que tu veux. La liste qui s'ouvre donne juste des suggestions.</p>
       </div>
-      <div><label>Prix (${v.currency})</label><input id="mfPrice" type="number" step="0.01" inputmode="decimal" value="${m.price}"/></div>
-      <div><label>Notes</label><input id="mfNotes" value="${escapeHtml(m.notes)}" placeholder="Marque produit, garage, détails..."/></div>
+      ${currencySegHtml('mfCur', m.currency||v.currency)}
+      <div><label id="mfPriceLab">Prix (${m.currency||v.currency})</label><input id="mfPrice" type="number" step="0.01" inputmode="decimal" value="${m.price}"/></div>
+      <div><label>Notes</label><input id="mfNotes" value="${escapeHtml(m.notes)}" placeholder="Marque produit, garage..."/></div>
     </div>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn" onclick="saveMaint('${existing?existing.id:''}')">💾 Enregistrer</button>
       ${existing?`<button class="btn danger" onclick="deleteMaint('${existing.id}')">🗑️ Supprimer</button>`:''}
     </div>
   `);
+  bindCurrencySeg('mfCur', 'mfPrice', c=>{ el('mfPriceLab').textContent = 'Prix ('+c+')' });
 }
-function saveMaint(id){
+async function saveMaint(id){
+  const v = active();
+  const fx = await getCurrentFx('mfCur');
+  const price = parseFloat(el('mfPrice').value)||0;
   const d = {
     id: id || uid(),
     date: el('mfDate').value || today(),
     km: parseFloat(el('mfKm').value)||0,
     type: el('mfType').value.trim(),
-    price: parseFloat(el('mfPrice').value)||0,
+    price,
+    currency: fx.cur, rate: fx.rate, fxDate: fx.date, fxSource: fx.source,
+    priceConverted: +(price*fx.rate).toFixed(2),
     notes: el('mfNotes').value.trim()
   };
   if(!d.type){ alert('Type requis'); return }
-  const v = active();
   if(id){ v.maintenance = v.maintenance.map(x=>x.id===id?d:x) } else { v.maintenance.push(d) }
   save(); renderAll(); closeModal(); toast(id?'Modifié':'Entretien ajouté');
 }
@@ -925,7 +1050,7 @@ function deleteMaint(id){
 
 function openTireForm(existing){
   const v = active();
-  const t = existing || { date:today(), brand:'', season:'Eté', unitPrice:'', mountingPrice:'', qty:v.tireQty||4, total:'', km:currentKm()||'' };
+  const t = existing || { date:today(), brand:'', season:'Eté', unitPrice:'', mountingPrice:'', qty:v.tireQty||4, total:'', km:currentKm()||'', currency:v.currency };
   showModal(`
     <h3>${existing?'Modifier':'Nouveau jeu de'} pneus 🛞 <button class="close" onclick="closeModal()">×</button></h3>
     <div class="grid cols2">
@@ -941,9 +1066,10 @@ function openTireForm(existing){
         </div>
       </div>
       <div><label>Quantité</label><input id="tfQty" type="number" inputmode="numeric" value="${t.qty}"/></div>
-      <div><label>Prix unitaire (${v.currency})</label><input id="tfPu" type="number" step="0.01" inputmode="decimal" value="${t.unitPrice}"/></div>
-      <div><label>Montage / pneu (${v.currency})</label><input id="tfMnt" type="number" step="0.01" inputmode="decimal" value="${t.mountingPrice}"/></div>
-      <div style="grid-column:1/-1"><label>Total (${v.currency}) — auto si vide</label><input id="tfTot" type="number" step="0.01" inputmode="decimal" value="${t.total}"/></div>
+      ${currencySegHtml('tfCur', t.currency||v.currency)}
+      <div><label id="tfPuLab">Prix unitaire (${t.currency||v.currency})</label><input id="tfPu" type="number" step="0.01" inputmode="decimal" value="${t.unitPrice}"/></div>
+      <div><label id="tfMntLab">Montage / pneu (${t.currency||v.currency})</label><input id="tfMnt" type="number" step="0.01" inputmode="decimal" value="${t.mountingPrice}"/></div>
+      <div style="grid-column:1/-1"><label id="tfTotLab">Total (${t.currency||v.currency}) — auto si vide</label><input id="tfTot" type="number" step="0.01" inputmode="decimal" value="${t.total}"/></div>
     </div>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn" onclick="saveTire('${existing?existing.id:''}')">💾 Enregistrer</button>
@@ -953,8 +1079,18 @@ function openTireForm(existing){
   el('tfSeason').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
     el('tfSeason').querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
   }));
+  // Auto-calc total when pu/mnt/qty change
+  const recalc = ()=>{ const pu=parseFloat(el('tfPu').value)||0, mnt=parseFloat(el('tfMnt').value)||0, qty=parseFloat(el('tfQty').value)||0; if(pu||mnt) el('tfTot').value=((pu+mnt)*qty).toFixed(2) };
+  ['tfPu','tfMnt','tfQty'].forEach(id=>el(id).addEventListener('input',recalc));
+  bindCurrencySeg('tfCur', 'tfTot', c=>{
+    el('tfPuLab').textContent='Prix unitaire ('+c+')';
+    el('tfMntLab').textContent='Montage / pneu ('+c+')';
+    el('tfTotLab').textContent='Total ('+c+') — auto si vide';
+  });
 }
-function saveTire(id){
+async function saveTire(id){
+  const v = active();
+  const fx = await getCurrentFx('tfCur');
   const qty = parseFloat(el('tfQty').value)||0;
   const pu  = parseFloat(el('tfPu').value)||0;
   const mnt = parseFloat(el('tfMnt').value)||0;
@@ -966,9 +1102,10 @@ function saveTire(id){
     km: parseFloat(el('tfKm').value)||0,
     brand: el('tfBrand').value.trim(),
     season: el('tfSeason').querySelector('button.active').dataset.v,
-    qty, unitPrice:pu, mountingPrice:mnt, total
+    qty, unitPrice:pu, mountingPrice:mnt, total,
+    currency: fx.cur, rate: fx.rate, fxDate: fx.date, fxSource: fx.source,
+    totalConverted: +(total*fx.rate).toFixed(2)
   };
-  const v = active();
   if(id){ v.tires = v.tires.map(x=>x.id===id?d:x) } else { v.tires.push(d) }
   save(); renderAll(); closeModal(); toast(id?'Modifié':'Pneus ajoutés');
 }
@@ -980,14 +1117,15 @@ function deleteTire(id){
 
 function openPurchaseForm(existing){
   const v = active();
-  const p = existing || { date:today(), type:'', price:'', km:currentKm()||'', notes:'' };
+  const p = existing || { date:today(), type:'', price:'', km:currentKm()||'', notes:'', currency:v.currency };
   showModal(`
     <h3>${existing?'Modifier':'Nouvel'} achat 🛍️ <button class="close" onclick="closeModal()">×</button></h3>
     <div class="grid cols2">
       <div><label>Date</label><input id="pfDate" type="date" value="${p.date||today()}"/></div>
       <div><label>Kilométrage</label><input id="pfKm" type="number" inputmode="numeric" value="${p.km}"/></div>
       <div style="grid-column:1/-1"><label>Désignation</label><input id="pfType" value="${escapeHtml(p.type)}" placeholder="Tapis, ampoules..."/></div>
-      <div><label>Prix (${v.currency})</label><input id="pfPrice" type="number" step="0.01" inputmode="decimal" value="${p.price}"/></div>
+      ${currencySegHtml('pfCur', p.currency||v.currency)}
+      <div><label id="pfPriceLab">Prix (${p.currency||v.currency})</label><input id="pfPrice" type="number" step="0.01" inputmode="decimal" value="${p.price}"/></div>
       <div><label>Notes</label><input id="pfNotes" value="${escapeHtml(p.notes)}"/></div>
     </div>
     <div class="btn-row" style="margin-top:14px">
@@ -995,18 +1133,23 @@ function openPurchaseForm(existing){
       ${existing?`<button class="btn danger" onclick="deletePurchase('${existing.id}')">🗑️ Supprimer</button>`:''}
     </div>
   `);
+  bindCurrencySeg('pfCur', 'pfPrice', c=>{ el('pfPriceLab').textContent='Prix ('+c+')' });
 }
-function savePurchase(id){
+async function savePurchase(id){
+  const v = active();
+  const fx = await getCurrentFx('pfCur');
+  const price = parseFloat(el('pfPrice').value)||0;
   const d = {
     id: id || uid(),
     date: el('pfDate').value || today(),
     km: parseFloat(el('pfKm').value)||0,
     type: el('pfType').value.trim(),
-    price: parseFloat(el('pfPrice').value)||0,
+    price,
+    currency: fx.cur, rate: fx.rate, fxDate: fx.date, fxSource: fx.source,
+    priceConverted: +(price*fx.rate).toFixed(2),
     notes: el('pfNotes').value.trim()
   };
   if(!d.type){ alert('Désignation requise'); return }
-  const v = active();
   if(id){ v.purchases = v.purchases.map(x=>x.id===id?d:x) } else { v.purchases.push(d) }
   save(); renderAll(); closeModal(); toast(id?'Modifié':'Achat ajouté');
 }
@@ -1071,15 +1214,17 @@ function renderFuelList(){
   wrap.innerHTML = arr.map(f=>{
     const meta = consMap[f.id];
     const tag = f.fullTank?'<span class="tag full">PLEIN</span>':'<span class="tag part">APPOINT</span>';
+    const fuelTag = f.fuel ? `<span class="tag">${escapeHtml(f.fuel)}</span>` : '';
     const adbTag = f.adblueLiters>0 ? `<span class="tag adblue">+ADBLUE ${fmt(f.adblueLiters,1)}L</span>` : '';
     const fxTag = (f.currency!==v.currency) ? `<span class="tag fx">${f.currency}→${v.currency} @${f.rate.toFixed(3)}</span>` : '';
     const amtMain = money(Number(f.totalConverted||f.total||0)+Number(f.adblueCostConverted||0), v.currency);
     const amtSub = (f.currency!==v.currency) ? `<small>${money(Number(f.total||0)+Number(f.adblueCost||0), f.currency)}</small>` : '';
+    const distLine = meta&&meta.dist ? `<div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:2px">+${fmtInt(meta.dist)} km</div>` : '';
     return `<div class="row-item" onclick='openFillupForm(${JSON.stringify(f).replace(/'/g,"&#39;")})'>
-      <div class="dt">${fmtDate(f.date)}<br/><span class="muted">${fmtInt(f.km)} km</span></div>
+      <div class="dt">${fmtDate(f.date)}<br/><span class="muted">${fmtInt(f.km)} km</span>${distLine}</div>
       <div>
-        <div class="ttl">${fmt(f.liters,2)} L à ${fmt(f.pricePerLiter,3)} ${moneySym(f.currency)}/L ${tag} ${adbTag} ${fxTag}</div>
-        <div class="meta">${meta&&meta.dist?fmtInt(meta.dist)+' km':''}${meta&&meta.conso?' · '+fmt(meta.conso,2)+' L/100':''}${f.notes?' · '+escapeHtml(f.notes):''}</div>
+        <div class="ttl">${fmt(f.liters,2)} L à ${fmt(f.pricePerLiter,3)} ${moneySym(f.currency)}/L ${fuelTag} ${tag} ${adbTag} ${fxTag}</div>
+        <div class="meta">${meta&&meta.conso?fmt(meta.conso,2)+' L/100':''}${f.notes?(meta&&meta.conso?' · ':'')+escapeHtml(f.notes):''}</div>
       </div>
       <div class="amt">${amtMain}${amtSub}</div>
     </div>`;
@@ -1094,12 +1239,16 @@ function renderMaintList(){
     el('cMaintCount').textContent='0'; return;
   }
   const arr = [...v.maintenance].sort((a,b)=>b.date.localeCompare(a.date));
-  wrap.innerHTML = arr.map(m=>`
-    <div class="row-item" onclick='openMaintForm(${JSON.stringify(m).replace(/'/g,"&#39;")})'>
+  wrap.innerHTML = arr.map(m=>{
+    const fxTag = (m.currency && m.currency!==v.currency) ? `<span class="tag fx">${m.currency}→${v.currency} @${(m.rate||1).toFixed(3)}</span>` : '';
+    const amtMain = money(maintCost(m), v.currency);
+    const amtSub = (m.currency && m.currency!==v.currency) ? `<small>${money(m.price, m.currency)}</small>` : '';
+    return `<div class="row-item" onclick='openMaintForm(${JSON.stringify(m).replace(/'/g,"&#39;")})'>
       <div class="dt">${fmtDate(m.date)}<br/><span class="muted">${fmtInt(m.km)} km</span></div>
-      <div><div class="ttl">${escapeHtml(m.type)}</div><div class="meta">${escapeHtml(m.notes||'')}</div></div>
-      <div class="amt">${money(m.price, v.currency)}</div>
-    </div>`).join('');
+      <div><div class="ttl">${escapeHtml(m.type)} ${fxTag}</div><div class="meta">${escapeHtml(m.notes||'')}</div></div>
+      <div class="amt">${amtMain}${amtSub}</div>
+    </div>`;
+  }).join('');
   el('cMaintCount').textContent=v.maintenance.length;
 }
 
@@ -1112,13 +1261,17 @@ function renderTireList(){
   const arr = [...v.tires].sort((a,b)=>b.date.localeCompare(a.date));
   wrap.innerHTML = arr.map(t=>{
     const seasonTag = t.season==='Eté'?'<span class="tag season-ete">ÉTÉ</span>':t.season==='Hiver'?'<span class="tag season-hiver">HIVER</span>':`<span class="tag">${escapeHtml(t.season||'')}</span>`;
+    const tcur = t.currency||v.currency;
+    const fxTag = (tcur!==v.currency) ? `<span class="tag fx">${tcur}→${v.currency} @${(t.rate||1).toFixed(3)}</span>` : '';
+    const amtMain = money(tireCost(t), v.currency);
+    const amtSub = (tcur!==v.currency) ? `<small>${money(t.total, tcur)}</small>` : '';
     return `<div class="row-item" onclick='openTireForm(${JSON.stringify(t).replace(/'/g,"&#39;")})'>
       <div class="dt">${fmtDate(t.date)}<br/><span class="muted">${fmtInt(t.km)} km</span></div>
       <div>
-        <div class="ttl">${escapeHtml(t.brand||'(sans marque)')} ${seasonTag}</div>
-        <div class="meta">x${t.qty||0} · ${money(t.unitPrice,v.currency)} + ${money(t.mountingPrice,v.currency)} montage</div>
+        <div class="ttl">${escapeHtml(t.brand||'(sans marque)')} ${seasonTag} ${fxTag}</div>
+        <div class="meta">x${t.qty||0} · ${money(t.unitPrice,tcur)} + ${money(t.mountingPrice,tcur)} montage</div>
       </div>
-      <div class="amt">${money(t.total, v.currency)}</div>
+      <div class="amt">${amtMain}${amtSub}</div>
     </div>`;
   }).join('');
   el('cTireCount').textContent=v.tires.length;
@@ -1131,12 +1284,17 @@ function renderBuyList(){
     el('cBuyCount').textContent='0'; return;
   }
   const arr = [...v.purchases].sort((a,b)=>b.date.localeCompare(a.date));
-  wrap.innerHTML = arr.map(p=>`
-    <div class="row-item" onclick='openPurchaseForm(${JSON.stringify(p).replace(/'/g,"&#39;")})'>
+  wrap.innerHTML = arr.map(p=>{
+    const pcur = p.currency||v.currency;
+    const fxTag = (pcur!==v.currency) ? `<span class="tag fx">${pcur}→${v.currency} @${(p.rate||1).toFixed(3)}</span>` : '';
+    const amtMain = money(purchaseCost(p), v.currency);
+    const amtSub = (pcur!==v.currency) ? `<small>${money(p.price, pcur)}</small>` : '';
+    return `<div class="row-item" onclick='openPurchaseForm(${JSON.stringify(p).replace(/'/g,"&#39;")})'>
       <div class="dt">${fmtDate(p.date)}<br/><span class="muted">${fmtInt(p.km)} km</span></div>
-      <div><div class="ttl">${escapeHtml(p.type)}</div><div class="meta">${escapeHtml(p.notes||'')}</div></div>
-      <div class="amt">${money(p.price, v.currency)}</div>
-    </div>`).join('');
+      <div><div class="ttl">${escapeHtml(p.type)} ${fxTag}</div><div class="meta">${escapeHtml(p.notes||'')}</div></div>
+      <div class="amt">${amtMain}${amtSub}</div>
+    </div>`;
+  }).join('');
   el('cBuyCount').textContent=v.purchases.length;
 }
 
@@ -1248,9 +1406,9 @@ function renderCharts(){
   const months = {};
   const cat = (m,k,vv)=>{ months[m]=months[m]||{Carburant:0,AdBlue:0,Entretien:0,Pneus:0,Achats:0}; months[m][k]+=vv };
   v.fillups.forEach(f=>{ cat(monthKey(f.date),'Carburant',Number(f.totalConverted||0)); if(Number(f.adblueCostConverted||0)>0) cat(monthKey(f.date),'AdBlue',Number(f.adblueCostConverted||0)) });
-  v.maintenance.forEach(m=>cat(monthKey(m.date),'Entretien',Number(m.price||0)));
-  v.tires.forEach(t=>cat(monthKey(t.date),'Pneus',Number(t.total||0)));
-  v.purchases.forEach(p=>cat(monthKey(p.date),'Achats',Number(p.price||0)));
+  v.maintenance.forEach(m=>cat(monthKey(m.date),'Entretien',maintCost(m)));
+  v.tires.forEach(t=>cat(monthKey(t.date),'Pneus',tireCost(t)));
+  v.purchases.forEach(p=>cat(monthKey(p.date),'Achats',purchaseCost(p)));
   const keys = Object.keys(months).sort();
   if(keys.length){
     const palette = {Carburant:'#3b82f6',AdBlue:'#22d3ee',Entretien:'#ef4444',Pneus:'#10b981',Achats:'#a855f7'};
@@ -1325,23 +1483,23 @@ function exportXLSX(){
   const v = active();
   const wb = XLSX.utils.book_new();
   const cur = v.currency;
-  const fuel = [['Date','Kilométrage','Distance','Devise paiement',`${moneySym(cur)}/L (converti)`,'Litres',`Coût total (${cur})`,`Coût d'origine`,'Taux','AdBlue L',`AdBlue (${cur})`,'Conso L/100','Type','Notes']];
+  const fuel = [['Date','Kilométrage','Distance','Carburant','Devise paiement',`${moneySym(cur)}/L (converti)`,'Litres',`Coût total (${cur})`,`Coût origine`,'Taux','AdBlue L','AdBlue €/L',`AdBlue (${cur})`,'Conso L/100','Type','Notes']];
   const sortedAsc = sortedFillups();
   for(let i=0;i<sortedAsc.length;i++){
     const f = sortedAsc[i]; const prev = i>0?sortedAsc[i-1]:null;
     const dist = prev ? (f.km-prev.km) : '';
     const conso = (prev && f.fullTank && dist>0) ? +((f.liters/dist)*100).toFixed(2) : '';
-    fuel.push([f.date,f.km,dist,f.currency,+priceConverted(f).toFixed(3),f.liters,+Number(f.totalConverted||f.total).toFixed(2),`${Number(f.total||0).toFixed(2)} ${f.currency}`,f.rate||1,f.adblueLiters||'',+Number(f.adblueCostConverted||0).toFixed(2),conso,f.fullTank?'PLEIN':'APPOINT',f.notes||'']);
+    fuel.push([f.date,f.km,dist,f.fuel||'',f.currency,+priceConverted(f).toFixed(3),f.liters,+Number(f.totalConverted||f.total).toFixed(2),`${Number(f.total||0).toFixed(2)} ${f.currency}`,f.rate||1,f.adblueLiters||'',f.adbluePricePerLiter||'',+Number(f.adblueCostConverted||0).toFixed(2),conso,f.fullTank?'PLEIN':'APPOINT',f.notes||'']);
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fuel),'Carburant');
-  const m = [['Date','Type',`Prix (${cur})`,'Kilométrage','Notes']];
-  [...v.maintenance].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>m.push([x.date,x.type,x.price,x.km,x.notes||'']));
+  const m = [['Date','Type',`Prix (${cur})`,'Devise','Prix origine','Taux','Kilométrage','Notes']];
+  [...v.maintenance].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>m.push([x.date,x.type,+maintCost(x).toFixed(2),x.currency||cur,x.price,x.rate||1,x.km,x.notes||'']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(m),'Entretiens');
-  const t = [['Date','Marque','Saison',`PU (${cur})`,`PU montage (${cur})`,'Qté',`Total (${cur})`,'Kilométrage']];
-  [...v.tires].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>t.push([x.date,x.brand,x.season,x.unitPrice,x.mountingPrice,x.qty,x.total,x.km]));
+  const t = [['Date','Marque','Saison','Qté',`Total (${cur})`,'Devise','Total origine','Taux','PU','PU montage','Kilométrage']];
+  [...v.tires].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>t.push([x.date,x.brand,x.season,x.qty,+tireCost(x).toFixed(2),x.currency||cur,x.total,x.rate||1,x.unitPrice,x.mountingPrice,x.km]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t),'Pneus');
-  const a = [['Date','Type',`Prix (${cur})`,'Kilométrage','Notes']];
-  [...v.purchases].sort((x,y)=>x.date.localeCompare(y.date)).forEach(x=>a.push([x.date,x.type,x.price,x.km,x.notes||'']));
+  const a = [['Date','Type',`Prix (${cur})`,'Devise','Prix origine','Taux','Kilométrage','Notes']];
+  [...v.purchases].sort((x,y)=>x.date.localeCompare(y.date)).forEach(x=>a.push([x.date,x.type,+purchaseCost(x).toFixed(2),x.currency||cur,x.price,x.rate||1,x.km,x.notes||'']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a),'Achats');
   const recap = [
     ['Véhicule',v.name||''],['Type',v.type],['Carburant',v.fuel],['Devise',v.currency],
