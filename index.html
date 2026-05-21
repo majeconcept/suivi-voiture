@@ -329,6 +329,23 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
     </div>
 
     <div class="card">
+      <h2>☁️ Synchronisation entre appareils</h2>
+      <div id="syncBox">
+        <p class="hint" style="margin-bottom:10px">Saisis le même mot de passe sur tous tes appareils pour synchroniser tes données en temps réel.</p>
+        <div class="grid cols2" style="align-items:end">
+          <div style="grid-column:1/-1"><label>Mot de passe de sync</label><input id="syncPw" type="password" placeholder="••••" autocomplete="off"/></div>
+        </div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn" onclick="syncEnable()">🔌 Activer la sync</button>
+          <button class="btn ghost small" onclick="syncPullNow()">⬇️ Forcer pull</button>
+          <button class="btn ghost small" onclick="syncPushNow()">⬆️ Forcer push</button>
+          <button class="btn ghost small" onclick="syncDisable()">🔌 Désactiver</button>
+        </div>
+        <div id="syncStatus" class="hint" style="margin-top:10px">—</div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>💱 Taux de change</h2>
       <div id="fxStatus" class="hint">—</div>
       <div class="btn-row" style="margin-top:10px">
@@ -536,7 +553,129 @@ function _sanitize(s){
   if(!s.activeId || !s.vehicles.find(v=>v.id===s.activeId)) s.activeId = s.vehicles[0].id;
   return s;
 }
-function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)) }
+function save(opts){
+  state.updatedAt = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  if(!opts || opts.sync!==false) schedulePush();
+}
+
+/* ============= CLOUD SYNC ============= */
+const SYNC_URL = '/api/sync';
+const SYNC_PW_KEY = 'sync_password';
+let _pushTimer = null;
+let _isSyncing = false;
+
+function syncEnabled(){ return !!localStorage.getItem(SYNC_PW_KEY) }
+function getSyncPw(){ return localStorage.getItem(SYNC_PW_KEY) || '' }
+function setSyncStatus(msg, cls){
+  const el2 = el('syncStatus'); if(!el2) return;
+  const c = cls==='ok'?'#10b981':cls==='bad'?'#ef4444':cls==='warn'?'#f59e0b':'#90a0c4';
+  el2.innerHTML = `<span style="color:${c}">${msg}</span>`;
+}
+function schedulePush(){
+  if(!syncEnabled()) return;
+  if(_pushTimer) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(syncPush, 1500);
+}
+async function syncPush(){
+  if(!syncEnabled() || _isSyncing) return;
+  _isSyncing = true;
+  setSyncStatus('☁️ Push en cours…');
+  try{
+    const r = await fetch(SYNC_URL, {
+      method:'PUT',
+      headers:{'x-sync-password':getSyncPw(),'content-type':'application/json'},
+      body: JSON.stringify(state)
+    });
+    if(r.status === 401){ setSyncStatus('🔒 Mot de passe invalide','bad'); _isSyncing=false; return }
+    if(!r.ok){ setSyncStatus('✗ Push échec ('+r.status+')','bad'); _isSyncing=false; return }
+    setSyncStatus('☁️ ✓ Synchronisé '+new Date().toLocaleTimeString('fr-FR'),'ok');
+  }catch(e){
+    setSyncStatus('✗ Hors ligne — sera resynchro plus tard','warn');
+  }finally{ _isSyncing=false }
+}
+async function syncPull(){
+  if(!syncEnabled() || _isSyncing) return;
+  _isSyncing = true;
+  setSyncStatus('☁️ Pull en cours…');
+  try{
+    const r = await fetch(SYNC_URL, { headers:{'x-sync-password':getSyncPw()} });
+    if(r.status === 401){ setSyncStatus('🔒 Mot de passe invalide','bad'); _isSyncing=false; return false }
+    if(!r.ok){ setSyncStatus('✗ Pull échec ('+r.status+')','bad'); _isSyncing=false; return false }
+    const cloud = await r.json();
+    if(!cloud){ setSyncStatus('☁️ Aucune donnée distante (pousse depuis cet appareil)','warn'); _isSyncing=false; return false }
+    const cloudT = Number(cloud.updatedAt||0);
+    const localT = Number(state.updatedAt||0);
+    if(cloudT >= localT){
+      state = _sanitize(cloud);
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+      renderAll();
+      if(!el('tab-reglages').classList.contains('hide')) loadSettingsToForm();
+      setSyncStatus('☁️ ⬇️ Récupéré '+new Date().toLocaleTimeString('fr-FR'),'ok');
+      return true;
+    } else {
+      setSyncStatus('ℹ️ Local plus récent — pousse pour mettre à jour le cloud','warn');
+      return false;
+    }
+  }catch(e){
+    setSyncStatus('✗ Hors ligne','warn');
+  }finally{ _isSyncing=false }
+}
+async function syncPullNow(){
+  if(!syncEnabled()){ alert('Active d\'abord la synchro'); return }
+  const r = await syncPull();
+  if(r) toast('Données synchronisées');
+}
+async function syncPushNow(){
+  if(!syncEnabled()){ alert('Active d\'abord la synchro'); return }
+  await syncPush();
+  toast('Envoyé');
+}
+async function syncEnable(){
+  const pw = el('syncPw').value.trim();
+  if(!pw){ alert('Saisis un mot de passe'); return }
+  localStorage.setItem(SYNC_PW_KEY, pw);
+  setSyncStatus('☁️ Test de connexion…');
+  // Try pull first to validate password and grab existing cloud data
+  const r = await fetch(SYNC_URL, { headers:{'x-sync-password':pw} });
+  if(r.status === 401){
+    localStorage.removeItem(SYNC_PW_KEY);
+    setSyncStatus('🔒 Mot de passe invalide','bad');
+    return;
+  }
+  if(!r.ok){
+    setSyncStatus('✗ Erreur ('+r.status+')','bad');
+    return;
+  }
+  const cloud = await r.json();
+  if(cloud && cloud.vehicles){
+    if(confirm('Des données existent sur le cloud. Les récupérer (remplace les données locales) ?')){
+      state = _sanitize(cloud);
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+      renderAll(); loadSettingsToForm();
+      setSyncStatus('☁️ ✓ Sync active — données récupérées','ok');
+      toast('Synchronisation activée');
+      return;
+    }
+  }
+  // Otherwise push local
+  await syncPush();
+  setSyncStatus('☁️ ✓ Sync active','ok');
+  toast('Synchronisation activée');
+}
+function syncDisable(){
+  if(!confirm('Désactiver la synchro sur cet appareil ? (les données locales sont conservées)')) return;
+  localStorage.removeItem(SYNC_PW_KEY);
+  el('syncPw').value='';
+  setSyncStatus('☁️ Sync désactivée','warn');
+  toast('Sync désactivée');
+}
+function renderSyncBox(){
+  const pw = getSyncPw();
+  if(el('syncPw')) el('syncPw').value = pw;
+  if(syncEnabled()) setSyncStatus('☁️ Sync activée','ok');
+  else setSyncStatus('☁️ Sync désactivée — saisis un mot de passe puis « Activer »','warn');
+}
 function active(){ return state.vehicles.find(v=>v.id===state.activeId) || state.vehicles[0] }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7) }
 
@@ -716,7 +855,7 @@ function switchTab(name){
   window.scrollTo({top:0,behavior:'instant'});
   if(name==='dashboard') renderDashboard();
   if(name==='entretien') renderMaintAlerts();
-  if(name==='reglages'){ loadSettingsToForm(); renderVehicleListSettings(); renderFxStatus() }
+  if(name==='reglages'){ loadSettingsToForm(); renderVehicleListSettings(); renderFxStatus(); renderSyncBox() }
 }
 function openAddForCurrentTab(){
   const a = document.querySelector('nav.tabs button.active').dataset.tab;
@@ -1637,6 +1776,8 @@ renderAll();
 switchTab('dashboard');
 // Pre-fetch today's rate so it's cached
 getRate('EUR','CHF'); getRate('CHF','EUR');
+// Pull from cloud at startup if sync is enabled (silent)
+if(syncEnabled()) setTimeout(syncPull, 500);
 
 let _resizeTimer;
 window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{ if(!el('tab-dashboard').classList.contains('hide')) renderCharts() },200) });
