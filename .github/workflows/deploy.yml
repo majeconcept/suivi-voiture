@@ -25,6 +25,7 @@ jobs:
           mkdir -p _dist
           cp index.html _dist/
           cp manifest.webmanifest _dist/
+          cp robots.txt _dist/
           cp icon-source.svg _dist/
           cp icon-180.png _dist/
           cp icon-192.png _dist/

@@ -1,0 +1,4 @@
+# Pas d'indexation par les moteurs de recherche
+User-agent: *
+Disallow: /
+Noindex: /
